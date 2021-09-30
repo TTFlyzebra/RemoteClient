@@ -1,0 +1,12 @@
+//
+// Created by FlyZebra on 2021/9/16 0016.
+//
+
+#ifndef ANDROID_CONFIG_H
+#define ANDROID_CONFIG_H
+
+#define REMOTE_SERVER_TCP_PORT      9036
+#define TERMINAL_SERVER_TCP_PORT    9038
+#define TERMINAL_MAX_BUFFER         8388608
+
+#endif //ANDROID_CONFIG_H

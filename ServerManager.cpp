@@ -3,16 +3,17 @@
 //
 
 #include "ServerManager.h"
+#include "FlyLog.h"
 
 ServerManager::ServerManager()
 {
-    printf("%s()\n", __func__);
+    FLOGD("%s()", __func__);
     pthread_mutex_init(&mLock, NULL);
 }
 
 ServerManager::~ServerManager()
 {
-    printf("%s()\n", __func__);
+    FLOGD("%s()", __func__);
     pthread_mutex_destroy(&mLock);
 }
 

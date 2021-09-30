@@ -11,7 +11,8 @@
 
 class INotify{
 public:
-    virtual void notify(char* data, int32_t size) {};
+    virtual ~INotify() {};
+    virtual void notify(char* data, int32_t size) = 0;
 };
 
 class ServerManager {

@@ -19,6 +19,7 @@ include $(CLEAR_VARS)
 LOCAL_SRC_FILES := \
 	main.cpp \
 	ServerManager.cpp \
+	TerminalSession.cpp \
 
 LOCAL_SHARED_LIBRARIES := \
 	libstagefright libmedia libutils libbinder libstagefright_foundation \
@@ -33,14 +34,6 @@ LOCAL_C_INCLUDES := \
 	vendor/flyzebra/lib/ffmpeg/include
 
 LOCAL_CFLAGS :=  \
-    -Werror -Wall \
-    -Wno-multichar \
-    -Wno-unused-parameter \
-    -Wno-unused-variable \
-    -Wno-unused-function \
-    -Wno-tautological-compare \
-    -Wno-uninitialized \
-    -Wno-non-virtual-dtor
 
 LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE:= mctl
