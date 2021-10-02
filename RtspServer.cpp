@@ -16,7 +16,7 @@
 #include "FlyLog.h"
 #include "Base64.h"
 #include "HandlerEvent.h"
-#include "config.h"
+#include "Config.h"
 
 using namespace android;
 

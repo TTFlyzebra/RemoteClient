@@ -7,7 +7,6 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <list>
-#include <pthread.h>
 #include <vector>
 #include <mutex>
 #include <thread>
@@ -28,14 +27,15 @@ public:
     void unRegisterListener(INotify* notify);
     void updataSync(char* data, int32_t size);
     void updataAsync(char* data, int32_t size);
+    
 private:
     void handleData();
 
 private:
+    volatile bool is_stop;
+
     std::list<INotify*> notifyList;
     std::mutex mlock_list;
-
-    volatile bool is_stop;
 
     std::thread *data_t;
     std::vector<char> dataBuf;

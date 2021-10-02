@@ -14,7 +14,7 @@
 #include "HandlerEvent.h"
 #include "FlyLog.h"
 #include "input.h"
-#include "config.h"
+#include "Config.h"
 #include "GlobalVariable.h"
 
 using namespace android;

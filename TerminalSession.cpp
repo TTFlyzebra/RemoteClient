@@ -9,7 +9,7 @@
 #include <netinet/in.h>
 #include "TerminalSession.h"
 #include "FlyLog.h"
-#include "config.h"
+#include "Config.h"
 #include "Command.h"
 
 TerminalSession::TerminalSession(ServerManager* manager)

@@ -46,7 +46,7 @@ extern "C"{
 }
 
 #include <system/audio.h>
-#include "config.h"
+#include "Config.h"
 
 #define SERVER_IP                    "127.0.0.1"
 #define SERVER_PORT                  "18183"
