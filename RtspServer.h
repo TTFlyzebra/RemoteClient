@@ -25,7 +25,7 @@ public:
 protected:
     virtual void onMessageReceived(const sp<AMessage> &msg);
 public:
-    virtual void notify(char* data, int32_t size);
+    virtual void notify(const char* data, int32_t size);
 
 private:
     enum {
@@ -58,9 +58,9 @@ private:
 	static void *_rtpudp_socket(void *arg);
 	static void *_rtcpudp_socket(void *arg);
 
-	void sendSPSPPS(const unsigned char* data, int32_t size, int64_t ptsUsec);
-    void sendVFrame(const unsigned char* data, int32_t size, int64_t ptsUsec);
-    void sendAFrame(const unsigned char* data, int32_t size, int64_t ptsUsec);
+    void sendSPSPPS(const     char* data, int32_t size, int64_t ptsUsec);
+    void sendVFrame(const     char* data, int32_t size, int64_t ptsUsec);
+    void sendAFrame(const     char* data, int32_t size, int64_t ptsUsec);
 
     struct client_conn {
           int32_t socket;
@@ -91,6 +91,8 @@ private:
 	volatile bool has_client = false;
 
     ServerManager* mManager;
+    std::mutex mlock_data;
+    std::mutex mlock_send;
 };
 
 }; // namespace android

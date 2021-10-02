@@ -36,7 +36,7 @@ void ServerManager::unRegisterListener(INotify* notify)
     notifyList.remove(notify);
 }
 
-void ServerManager::updataSync(char* data, int32_t size)
+void ServerManager::updataSync(const char* data, int32_t size)
 {
     std::lock_guard<std::mutex> lock (mlock_list);
     for (std::list<INotify*>::iterator it = notifyList.begin(); it != notifyList.end(); ++it) {
@@ -44,7 +44,7 @@ void ServerManager::updataSync(char* data, int32_t size)
     }
 }
 
-void ServerManager::updataAsync(char* data, int32_t size)
+void ServerManager::updataAsync(const char* data, int32_t size)
 {
     std::lock_guard<std::mutex> lock (mlock_data);
     if (dataBuf.size() > TERMINAL_MAX_BUFFER) {
@@ -57,24 +57,31 @@ void ServerManager::updataAsync(char* data, int32_t size)
 
 void ServerManager::handleData()
 {
+    printf("%s() start!\n", __func__);
     while(!is_stop){
         std::unique_lock<std::mutex> lock (mlock_data);
-        while (!is_stop && dataBuf.empty()) {
+        while (!is_stop && dataBuf.size() < 19) {
             mcond_data.wait(lock);
         }
         if(is_stop) break;
-        if(dataBuf.size()<8) continue;
+        //char temp[4096] = {0};
+        //for (int32_t i = 0; i < 8; i++) {
+        //    sprintf(temp, "%s%02x:", temp, dataBuf[i]);
+        //}
+        //printf("notify:->%s\n", temp);
         if(((dataBuf[0]&0xFF)!=0xEE)||((dataBuf[1]&0xFF)!=0xAA)){
-            printf("handleData bad header[%02x:%02x]\n", dataBuf[0]&0xFF, dataBuf[1]&0xFF);
+            printf("handleData bad header[%02x:%02x]\n", dataBuf[0], dataBuf[1]);
             dataBuf.clear();
             continue;
         }
         int32_t dataSize = dataBuf[4]<<24|dataBuf[5]<<16|dataBuf[6]<<8|dataBuf[7];
         if(dataSize+8>dataBuf.size()) {
             printf("handleData size error, dataSize=%d, bufSize=%zu\n", dataSize+8, dataBuf.size());
+            dataBuf.clear();
             continue;
         }
         updataSync(&dataBuf[0], dataSize+8);
         dataBuf.erase(dataBuf.begin(),dataBuf.begin()+dataSize+8);
     }
+    printf("%s() exit!\n", __func__);
 }

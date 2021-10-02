@@ -16,7 +16,7 @@
 class INotify{
 public:
     virtual ~INotify() {};
-    virtual void notify(char* data, int32_t size) = 0;
+    virtual void notify(const char* data, int32_t size) = 0;
 };
 
 class ServerManager {
@@ -25,8 +25,8 @@ public:
     ~ServerManager();
     void registerListener(INotify* notify);
     void unRegisterListener(INotify* notify);
-    void updataSync(char* data, int32_t size);
-    void updataAsync(char* data, int32_t size);
+    void updataSync(const char* data, int32_t size);
+    void updataAsync(const char* data, int32_t size);
     
 private:
     void handleData();

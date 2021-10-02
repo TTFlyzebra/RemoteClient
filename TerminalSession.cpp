@@ -30,7 +30,6 @@ TerminalSession::~TerminalSession()
     is_stop = true;
 	shutdown(mSocket, SHUT_RDWR);
     close(mSocket);
-    printf("%s() 1\n", __func__);
     {
         std::lock_guard<std::mutex> lock (mlock_conn);
         mcond_conn.notify_all();
@@ -39,7 +38,6 @@ TerminalSession::~TerminalSession()
         std::lock_guard<std::mutex> lock (mlock_send);
         mcond_send.notify_all();
     }
-    printf("%s() 2\n", __func__);
     recv_t->join();
     send_t->join();
     hand_t->join();
@@ -49,13 +47,14 @@ TerminalSession::~TerminalSession()
     printf("%s()\n", __func__);
 }
 
-void TerminalSession::notify(char* data, int32_t size)
+void TerminalSession::notify(const char* data, int32_t size)
 {
-    char temp[4096];
-    for (int32_t i = 0; i < 8; i++) {
-        printf(temp, "%s%02x:\n", temp, data[i]);
+    char temp[4096] = {0};
+    memset(temp,0,4096);
+    for (int32_t i = 0; i < 10; i++) {
+        sprintf(temp, "%s%02x:", temp, data[i]);
     }
-    printf("notify:size=[%d]\n%s\n", size, temp);
+    printf("TerminalSession->notify->%s[%d]\n", temp, size);
 }
 
 void TerminalSession::recvThread()

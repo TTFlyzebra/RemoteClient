@@ -17,6 +17,7 @@
 #include "Base64.h"
 #include "HandlerEvent.h"
 #include "Config.h"
+#include "Command.h"
 
 using namespace android;
 
@@ -32,13 +33,14 @@ RtspServer::~RtspServer()
 }
 
 
-void RtspServer::notify(char* data, int32_t size)
+void RtspServer::notify(const char* data, int32_t size)
 {
-    char temp[4096];
-    for (int32_t i = 0; i < 8; i++) {
-        printf(temp, "%s%02x:\n", temp, data[i]);
+    char temp[4096] = {0};
+    memset(temp,0,4096);
+    for (int32_t i = 0; i < 10; i++) {
+        sprintf(temp, "%s%02x:", temp, data[i]);
     }
-    printf("notify:size=[%d]\n%s\n", size, temp);
+    printf("RtspServer->notify->%s[%d]\n", temp, size);
 }
 
 void RtspServer::onMessageReceived(const sp<AMessage> &msg)
@@ -369,7 +371,7 @@ void RtspServer::handleMediaNotify(const sp<AMessage> &msg)
                 CHECK(msg->findBuffer("data", &data));
                 sps_pps.clear();
                 sps_pps.insert(sps_pps.end(), data->data(), data->data()+data->capacity());
-                sendSPSPPS((const unsigned char*)&sps_pps[0], sps_pps.size(), 0);
+                sendSPSPPS((const  char*)&sps_pps[0], sps_pps.size(), 0);
             }
             break;
         case kWhatVideoFrameData:
@@ -378,7 +380,7 @@ void RtspServer::handleMediaNotify(const sp<AMessage> &msg)
                 CHECK(msg->findBuffer("data", &data));
                 int64_t ptsUsec;
                 CHECK(msg->findInt64("ptsUsec", &ptsUsec));
-                sendVFrame(data->data(), data->capacity(), ptsUsec);
+                sendVFrame((const char*)data->data(), data->capacity(), ptsUsec);
             }
             break;
         case kWhatAudioFrameData:
@@ -387,7 +389,7 @@ void RtspServer::handleMediaNotify(const sp<AMessage> &msg)
                 CHECK(msg->findBuffer("data", &data));
                 int64_t ptsUsec;
                 CHECK(msg->findInt64("ptsUsec", &ptsUsec));
-                sendAFrame(data->data(), data->capacity(), ptsUsec);
+                sendAFrame((const char*)data->data(), data->capacity(), ptsUsec);
             }
             break;
     }
@@ -575,10 +577,26 @@ status_t RtspServer::onOtherRequest(const char* data, int32_t socket_fd, int32_t
     return 0;
 }
 
-void RtspServer::sendSPSPPS(const unsigned char* sps_pps, int32_t size, int64_t ptsUsec)
+void RtspServer::sendSPSPPS(const     char* sps_pps, int32_t size, int64_t ptsUsec)
 {
+    if(size<=0 || is_stop) return;
+    char head_video[sizeof(videodata)];
+    memcpy(head_video, videodata, sizeof(videodata));
+    int32_t dataLen = size + 10;
+    head_video[4]  = (dataLen & 0xFF000000) >> 24;
+    head_video[5]  = (dataLen & 0xFF0000) >> 16;
+    head_video[6] =  (dataLen & 0xFF00) >> 8;
+    head_video[7] =   dataLen & 0xFF;
+    {
+        std::lock_guard<std::mutex> lock (mlock_data);
+        mManager->updataAsync(head_video, sizeof(videodata));
+        mManager->updataAsync(sps_pps, size);
+    }
+        
+    int32_t vsize = conn_sockets.size();
+    if(vsize<=0) return;
     sequencenumber1++;
-    char rtp_pack[16 + size];
+    char rtp_pack[16];
     rtp_pack[0] = '$';
     rtp_pack[1] = 0x00;
     rtp_pack[2] = ((size+12) & 0xFF00 ) >> 8;
@@ -591,14 +609,17 @@ void RtspServer::sendSPSPPS(const unsigned char* sps_pps, int32_t size, int64_t 
     rtp_pack[9]  = (ptsUsec & 0xFF0000) >> 16;
     rtp_pack[10] = (ptsUsec & 0xFF00) >> 8;
     rtp_pack[11] =  ptsUsec & 0xFF;
-    memcpy(rtp_pack+16, sps_pps, size);
-    int32_t sendLen;
-    int32_t vsize = conn_sockets.size();
+    int32_t sendLen;    
     for(int32_t i=0; i<vsize; i++){
         if(!has_client || is_stop) break;
         if(conn_sockets[i].type==RTP_TCP){
-            sendLen = send(conn_sockets[i].socket, rtp_pack, 16+size, 0);
+            std::lock_guard<std::mutex> lock (mlock_send);
+            sendLen =  send(conn_sockets[i].socket, rtp_pack, 16, 0);
+            sendLen += send(conn_sockets[i].socket, sps_pps, size, 0);
         }else{
+            char udp_pack[16 + size];
+            memcpy(udp_pack, rtp_pack, 16);
+            memcpy(udp_pack+16, sps_pps, size);
             sendLen = sendto(rtp_socket, rtp_pack+4, 12+size, 0, (struct sockaddr*)&conn_sockets[i].addr_in, conn_sockets[i].addrLen);
         }
         if(sendLen <= 0) {
@@ -613,16 +634,32 @@ void RtspServer::sendSPSPPS(const unsigned char* sps_pps, int32_t size, int64_t 
     }
 }
 
-void RtspServer::sendVFrame(const unsigned char* video, int32_t size, int64_t ptsUsec)
+void RtspServer::sendVFrame(const     char* video, int32_t size, int64_t ptsUsec)
 {
+    if(size<=0 || is_stop) return;
+    char head_video[sizeof(videodata)];
+    memcpy(head_video, videodata, sizeof(videodata));
+    int32_t dataLen = size + 10;
+    head_video[4]  = (dataLen & 0xFF000000) >> 24;
+    head_video[5]  = (dataLen & 0xFF0000) >> 16;
+    head_video[6] =  (dataLen & 0xFF00) >> 8;
+    head_video[7] =   dataLen & 0xFF;
+    {
+        std::lock_guard<std::mutex> lock (mlock_data);
+        mManager->updataAsync(head_video, sizeof(videodata));
+        mManager->updataAsync(video, size);
+    }
+    
+    int32_t vsize = conn_sockets.size();
+    if(vsize<=0) return;
     unsigned char nalu = video[0];
     if((nalu&0x1F)==5){
-        sendSPSPPS((const unsigned char*)&sps_pps[0], sps_pps.size(), ptsUsec);
+        sendSPSPPS((const  char*)&sps_pps[0], sps_pps.size(), ptsUsec);
     }
     int32_t fau_num = 1280 - 18;
     if(size <= fau_num){
         sequencenumber1++;
-        char rtp_pack[16 + size];
+        char rtp_pack[16];
         rtp_pack[0]  = '$';
         rtp_pack[1]  = 0x00;
         rtp_pack[2]  = ((size+12) & 0xFF00 ) >> 8;
@@ -635,15 +672,18 @@ void RtspServer::sendVFrame(const unsigned char* video, int32_t size, int64_t pt
         rtp_pack[9]  = (ptsUsec & 0xFF0000) >> 16;
         rtp_pack[10] = (ptsUsec & 0xFF00) >> 8;
         rtp_pack[11] =  ptsUsec & 0xFF;
-        memcpy(rtp_pack+16, video, size);
         int32_t sendLen;
-        int32_t vsize = conn_sockets.size();
         for(int32_t i=0; i<vsize; i++){
             if(!has_client || is_stop) break;
             if(conn_sockets[i].type==RTP_TCP){
-                sendLen = send(conn_sockets[i].socket,rtp_pack,16+size,0);
+                std::lock_guard<std::mutex> lock (mlock_send);
+                sendLen =  send(conn_sockets[i].socket,rtp_pack,16,0);
+                sendLen += send(conn_sockets[i].socket,video,size,0);
             }else{
-                sendLen = sendto(rtp_socket, rtp_pack+4, 12+size, 0, (struct sockaddr*)&conn_sockets[i].addr_in, conn_sockets[i].addrLen);
+                char udp_pack[16 + size];
+                memcpy(udp_pack, rtp_pack, 16);
+                memcpy(udp_pack+16, video, size);
+                sendLen =  sendto(rtp_socket, udp_pack+4, 12+size, 0, (struct sockaddr*)&conn_sockets[i].addr_in, conn_sockets[i].addrLen);
             }
             if(sendLen <= 0) {
                 FLOGE("SEND FULL[%d][%d] errno=%d!", sendLen,12+size, errno);
@@ -662,7 +702,7 @@ void RtspServer::sendVFrame(const unsigned char* video, int32_t size, int64_t pt
             bool last = ((size -1 - num * fau_num)<=fau_num);
             int32_t rtpsize = last?(size -1 - num * fau_num) : fau_num;
             sequencenumber1++;
-            char rtp_pack[18 + rtpsize];
+            char rtp_pack[18];
             rtp_pack[0]  = '$';
             rtp_pack[1]  = 0x00;
             rtp_pack[2]  = ((rtpsize+14) & 0xFF00 ) >> 8;
@@ -677,15 +717,18 @@ void RtspServer::sendVFrame(const unsigned char* video, int32_t size, int64_t pt
             rtp_pack[11] =  ptsUsec & 0xFF;
             rtp_pack[16] =  (nalu&0xE0)|0x1C;
             rtp_pack[17] =  first?(0x80|(nalu&0x1F)):(last?(0x40|(nalu&0x1F)):(nalu&0x1F));
-            memcpy(rtp_pack+18, video+num*fau_num+1, rtpsize);
             int32_t sendLen;
-            int32_t vsize = conn_sockets.size();
             for(int32_t i=0; i<vsize; i++){
                 if(!has_client || is_stop) break;
                 if(conn_sockets[i].type==RTP_TCP){
-                    sendLen = send(conn_sockets[i].socket,rtp_pack,18+rtpsize,0);
+                    std::lock_guard<std::mutex> lock (mlock_send);
+                    sendLen =  send(conn_sockets[i].socket,rtp_pack,18,0);
+                    sendLen += send(conn_sockets[i].socket,video+num*fau_num+1,rtpsize,0);
                 }else{
-                    sendLen = sendto(rtp_socket, rtp_pack+4, 14+rtpsize, 0, (struct sockaddr*)&conn_sockets[i].addr_in, conn_sockets[i].addrLen);
+                    char udp_pack[18 + size];
+                    memcpy(udp_pack, rtp_pack, 18);
+                    memcpy(udp_pack+18, video+num*fau_num+1, rtpsize);
+                    sendLen =  sendto(rtp_socket, udp_pack+4, 14+rtpsize, 0, (struct sockaddr*)&conn_sockets[i].addr_in, conn_sockets[i].addrLen);
                 }
                 if(sendLen <= 0) {
                     FLOGE("SEND FU-A[%d][%d][%d][%d] errno=%d", sendLen,rtpsize+14,num,size,errno);
@@ -703,12 +746,26 @@ void RtspServer::sendVFrame(const unsigned char* video, int32_t size, int64_t pt
     //FLOGD("SEND VFrame[ptsUsec=%ld][%d]", ptsUsec, size);
 }
 
-void RtspServer::sendAFrame(const unsigned char* audio, int32_t size, int64_t ptsUsec)
+void RtspServer::sendAFrame(const     char* audio, int32_t size, int64_t ptsUsec)
 {
+    if(size<=0 || is_stop) return;
+    char head_audio[sizeof(audiodata)];
+    memcpy(head_audio, audiodata, sizeof(audiodata));
+    int32_t dataLen = size + 10;
+    head_audio[4]  = (dataLen & 0xFF000000) >> 24;
+    head_audio[5]  = (dataLen & 0xFF0000) >> 16;
+    head_audio[6] =  (dataLen & 0xFF00) >> 8;
+    head_audio[7] =   dataLen & 0xFF;
+    {
+        std::lock_guard<std::mutex> lock (mlock_data);
+        mManager->updataAsync(head_audio, sizeof(audiodata));
+        mManager->updataAsync(audio, size);
+    }
+
     int32_t vsize = conn_sockets.size();
     if(vsize<=0) return;
     sequencenumber1++;
-    char rtp_pack[20 + size];
+    char rtp_pack[20];
     rtp_pack[0]  = '$';
     rtp_pack[1]  = 0x02;
     rtp_pack[2]  = ((size+16) & 0xFF00 ) >> 8;
@@ -732,14 +789,18 @@ void RtspServer::sendAFrame(const unsigned char* audio, int32_t size, int64_t pt
     //rtp_pack[24] = ((size+7) & 0x7ff) >> 3;
     //rtp_pack[25] = (((size+7) & 0x7) << 5)|0x1F;
     //rtp_pack[26] = 0xFC;
-    memcpy(rtp_pack+20, audio, size);
     int32_t sendLen;
     for(int32_t i=0; i<vsize; i++){
         if(!has_client || is_stop) break;
         if(conn_sockets[i].type==RTP_TCP){
-            sendLen = send(conn_sockets[i].socket, rtp_pack, 20+size, 0);
+            std::lock_guard<std::mutex> lock (mlock_send);
+            sendLen =  send(conn_sockets[i].socket, rtp_pack, 20, 0);
+            sendLen += send(conn_sockets[i].socket, audio, size, 0);
         }else{
-            sendLen = sendto(rtp_socket, rtp_pack+4, 16+size, 0, (struct sockaddr*)&conn_sockets[i].addr_in, conn_sockets[i].addrLen);
+            char udp_pack[20 + size];
+            memcpy(udp_pack, rtp_pack, 20);
+            memcpy(udp_pack+20, audio, size);
+            sendLen =  sendto(rtp_socket, rtp_pack+4, 16+size, 0, (struct sockaddr*)&conn_sockets[i].addr_in, conn_sockets[i].addrLen);
         }
         if(sendLen <= 0) {
             FLOGE("SEND AUDIO[%d][%d] errno=%d", sendLen, 20+size, errno);
