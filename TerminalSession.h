@@ -19,7 +19,7 @@ public:
     ~TerminalSession();
 
 public:
-    void notify(char* data, int32_t size);
+    virtual void notify(char* data, int32_t size);
 
 private:
     void recvThread();
@@ -32,6 +32,8 @@ private:
 
     volatile bool is_stop;
     volatile bool is_connect;
+    std::mutex mlock_conn;
+    std::condition_variable mcond_conn;
 
     std::thread *send_t;
     std::vector<char> sendBuf;

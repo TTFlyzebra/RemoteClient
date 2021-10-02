@@ -8,6 +8,11 @@
 #include <stdint.h>
 #include <list>
 #include <pthread.h>
+#include <vector>
+#include <mutex>
+#include <thread>
+#include <condition_variable>
+
 
 class INotify{
 public:
@@ -21,11 +26,21 @@ public:
     ~ServerManager();
     void registerListener(INotify* notify);
     void unRegisterListener(INotify* notify);
-    void update(char* data, int32_t size);
+    void updataSync(char* data, int32_t size);
+    void updataAsync(char* data, int32_t size);
+private:
+    void handleData();
 
 private:
     std::list<INotify*> notifyList;
-    pthread_mutex_t mLock;
+    std::mutex mlock_list;
+
+    volatile bool is_stop;
+
+    std::thread *data_t;
+    std::vector<char> dataBuf;
+    std::mutex mlock_data;
+    std::condition_variable mcond_data;
 };
 
 #endif //ANDROID_SERVERMANAGER_H

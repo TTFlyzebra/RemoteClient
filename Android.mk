@@ -17,23 +17,56 @@ LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
 
 LOCAL_SRC_FILES := \
-	main.cpp \
-	ServerManager.cpp \
-	TerminalSession.cpp \
+	mobilectl.cpp \
+    screenrecord.cpp \
+    EglWindow.cpp \
+    FrameOutput.cpp \
+    TextRenderer.cpp \
+    Overlay.cpp \
+    Program.cpp \
+    RtspServer.cpp \
+    ScreenDisplay.cpp \
+    Base64.cpp \
+    Controller.cpp \
+    AudioEncoder.cpp \
+    TerminalSession.cpp \
+    ServerManager.cpp
 
 LOCAL_SHARED_LIBRARIES := \
-	libstagefright libmedia libutils libbinder libstagefright_foundation \
-	libjpeg libgui libcutils liblog libEGL libGLESv2 \
-	libavcodec-57 libavdevice-57 libavfilter-6 libavformat-57 libavutil-55 libpostproc-54 libswresample-2 libswscale-4
+	libstagefright \
+	libmedia \
+	libmedia_omx \
+	libutils \
+	libbinder \
+	libstagefright_foundation \
+	libjpeg \
+	libui \
+	libgui \
+	libcutils \
+	liblog \
+	libEGL \
+	libGLESv2 \
+	libavcodec-57 \
+	libavdevice-57 \
+	libavfilter-6 \
+	libavformat-57 \
+	libavutil-55 \
+	libpostproc-54 \
+	libswresample-2 \
+	libswscale-4
 
 LOCAL_C_INCLUDES := \
 	frameworks/av/media/libstagefright \
 	frameworks/av/media/libstagefright/include \
 	frameworks/native/include/media/openmax \
-	external/jpeg \
-	vendor/flyzebra/lib/ffmpeg/include
+	vendor/zebra/library/ffmpeg/include
 
 LOCAL_CFLAGS :=  \
+    -Werror -Wall \
+    -Wno-multichar \
+    -Wno-unused-parameter \
+    -Wno-unused-variable \
+    -Wno-unused-function
 
 LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE:= mctl

@@ -6,36 +6,40 @@
 #include "FlyLog.h"
 
 ServerManager::ServerManager()
+:is_stop(false)
 {
-    FLOGD("%s()", __func__);
-    pthread_mutex_init(&mLock, NULL);
+    printf("%s()\n", __func__);
+    data_t = new std::thread(&ServerManager::handleData, this);
 }
 
 ServerManager::~ServerManager()
 {
-    FLOGD("%s()", __func__);
-    pthread_mutex_destroy(&mLock);
+    data_t->join();
+    delete data_t;
+    printf("%s()\n", __func__);
 }
 
 void ServerManager::registerListener(INotify* notify)
 {
-    pthread_mutex_lock(&mLock);
+    std::lock_guard<std::mutex> lock (mlock_list);
     notifyList.push_back(notify);
-    pthread_mutex_unlock(&mLock);
 }
 
 void ServerManager::unRegisterListener(INotify* notify)
 {
-    pthread_mutex_lock(&mLock);
+    std::lock_guard<std::mutex> lock (mlock_list);
     notifyList.remove(notify);
-    pthread_mutex_unlock(&mLock);
 }
 
-void ServerManager::update(char* data, int32_t size)
+void ServerManager::updataSync(char* data, int32_t size)
 {
-    pthread_mutex_lock(&mLock);
+    std::lock_guard<std::mutex> lock (mlock_list);
     for (std::list<INotify*>::iterator it = notifyList.begin(); it != notifyList.end(); ++it) {
         ((INotify*)*it)->notify(data, size);
     }
-    pthread_mutex_unlock(&mLock);
+}
+
+void ServerManager::handleData()
+{
+
 }
