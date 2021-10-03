@@ -21,6 +21,7 @@ RtspClient::RtspClient(RtspServer* server, ServerManager* manager, int32_t socke
 ,mSocket(socket)
 ,is_stop(false)
 ,is_disconnect(false)
+,conn_type(RTP_TCP)
 {
     FLOGD("%s()\n", __func__);
     mManager->registerListener(this);
@@ -435,8 +436,6 @@ void RtspClient::sendVFrame(const     char* video, int32_t size, int64_t ptsUsec
                 sendData(send_pack,rtpsize+18);
             }else{
                 char send_pack[18 + size];
-                memcpy(send_pack, rtp_pack, 18);
-                memcpy(send_pack+18, video+num*fau_num+1, rtpsize);
                 sendto(mServer->rtp_socket, send_pack+4, 14+rtpsize, 0, (struct sockaddr*)&conn_addr_in, conn_addrLen);
             }
             num++;

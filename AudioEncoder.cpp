@@ -249,6 +249,7 @@ void AudioEncoder::codecRelease()
 void AudioEncoder::encoderPCMData(sp<ABuffer> pcmdata,      int32_t sample_fmt, int32_t sample_rate, int64_t ch_layout)
 {
     int32_t key = ((ch_layout<<24)&0xFF000000)+((sample_fmt<<16)&0x00FF0000)+(sample_rate&0x0000FFFF);
+    int64_t ptsUsec = systemTime(SYSTEM_TIME_MONOTONIC) / 1000000;
     struct SwrContext* swr_cxt = NULL;
     auto swr_cxt_find = swr_cxts.find(key);
     if (swr_cxt_find != swr_cxts.end()) {
@@ -292,14 +293,13 @@ void AudioEncoder::encoderPCMData(sp<ABuffer> pcmdata,      int32_t sample_fmt, 
 
     if(retLen<=0){
         FLOGE("swr_convert failed, delay=%ld, out_count=%ld, retLen=%d", delay, out_count, retLen);
-        return;
     }else if(!is_stop){
         //use mediacodec
         size_t inIndex, outIndex, offset, size;
         uint32_t flags;
-        int64_t ptsUsec = 0;
+        ptsUsec = 0;
          //input data
-        err = mCodec->dequeueInputBuffer(&inIndex, 2000);
+        err = mCodec->dequeueInputBuffer(&inIndex, 1000);
         if(err != OK) {
             FLOGE("codec->dequeueInputBuffer inIdex=%zu, err=%d", inIndex, err);
             return;
@@ -319,7 +319,7 @@ void AudioEncoder::encoderPCMData(sp<ABuffer> pcmdata,      int32_t sample_fmt, 
             return;
         }
         //output data
-        err = mCodec->dequeueOutputBuffer(&outIndex, &offset, &size, &ptsUsec, &flags, 2000);
+        err = mCodec->dequeueOutputBuffer(&outIndex, &offset, &size, &ptsUsec, &flags, 1000);
         switch (err) {
             case OK:
                 if (size != 0) {
