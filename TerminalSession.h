@@ -19,10 +19,10 @@ public:
     ~TerminalSession();
 
 public:
-    virtual void notify(const char* data, int32_t size);
+    virtual int32_t notify(const char* data, int32_t size);
 
 private:
-    void recvThread();
+    void connThread();
     void sendThread();
     void handThread();
 

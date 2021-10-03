@@ -19,7 +19,7 @@ TerminalSession::TerminalSession(ServerManager* manager)
 {
     printf("%s()\n", __func__);
     mManager->registerListener(this);
-    recv_t = new std::thread(&TerminalSession::recvThread, this);
+    recv_t = new std::thread(&TerminalSession::connThread, this);
     send_t = new std::thread(&TerminalSession::sendThread, this);
     hand_t = new std::thread(&TerminalSession::handThread, this);
 }
@@ -47,17 +47,18 @@ TerminalSession::~TerminalSession()
     printf("%s()\n", __func__);
 }
 
-void TerminalSession::notify(const char* data, int32_t size)
+int32_t TerminalSession::notify(const char* data, int32_t size)
 {
     char temp[4096] = {0};
     memset(temp,0,4096);
     for (int32_t i = 0; i < 10; i++) {
         sprintf(temp, "%s%02x:", temp, data[i]);
     }
-    printf("TerminalSession->notify->%s[%d]\n", temp, size);
+    //printf("TerminalSession->notify->%s[%d]\n", temp, size);
+    return -1;
 }
 
-void TerminalSession::recvThread()
+void TerminalSession::connThread()
 {
     printf("%s() start!\n", __func__);   
     char tempBuf[4096];
@@ -110,36 +111,34 @@ void TerminalSession::sendThread()
     while (!is_stop) {
         {
             std::unique_lock<std::mutex> lock (mlock_conn);
-        	if (!is_connect) {
+        	while (!is_stop && !is_connect) {
         	    mcond_conn.wait(lock);
-                if(is_stop) break;
         	}
+            if(is_stop) break;
         }
         {
             std::unique_lock<std::mutex> lock (mlock_send);
-        	if (sendBuf.empty()) {
+        	while (!is_stop && sendBuf.empty()) {
         	    mcond_send.wait(lock);
-                if(is_stop) break;
         	}
-        	if (!sendBuf.empty()) {
-        		int32_t sendSize = 0;
-        		int32_t dataSize = sendBuf.size();
-        		while(sendSize<dataSize){
-        		    int32_t sendLen = send(mSocket,(const char*)&sendBuf[sendSize],dataSize-sendSize, 0);
-        		    printf("%s sendLen=%d, errno=%d.\n", __func__, sendLen, errno);
-        		    if (sendLen <= 0) {
-        		        if(errno!=11 || errno!= 0) {
-        		            //TODO::disconnect
-        		            sendBuf.clear();
-        		            is_connect = false;
-        		            break;
-        		        }
-        		    }else{
-        		        sendSize+=sendLen;
-        		    }
-        		}
-        		sendBuf.clear();
+            if(is_stop) break;
+        	int32_t sendSize = 0;
+        	int32_t dataSize = sendBuf.size();
+        	while(!is_stop && sendSize<dataSize){
+        	    int32_t sendLen = send(mSocket,(const char*)&sendBuf[sendSize],dataSize-sendSize, 0);
+        	    printf("%s sendLen=%d, errno=%d.\n", __func__, sendLen, errno);
+        	    if (sendLen <= 0) {
+        	        if(errno != 11 || errno!= 0) {
+        	            //TODO::disconnect
+        	            is_connect = false;
+                        sendBuf.clear();
+        	            break;
+        	        }
+        	    }else{
+        	        sendSize+=sendLen;
+        	    }
         	}
+        	sendBuf.clear();
         }
     }
     printf("%s() exit!\n", __func__);
@@ -149,7 +148,6 @@ void TerminalSession::handThread()
 {
     printf("%s() start!\n", __func__);
     while(!is_stop){
-        printf("%s() is running....\n", __func__);
         {
             std::lock_guard<std::mutex> lock (mlock_send);
             sendBuf.insert(sendBuf.end(), heartbeat, heartbeat + sizeof(heartbeat));

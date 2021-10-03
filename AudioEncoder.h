@@ -46,7 +46,7 @@ extern "C"{
 }
 
 #include <system/audio.h>
-#include "Config.h"
+#include "ServerManager.h"
 
 #define SERVER_IP                    "127.0.0.1"
 #define SERVER_PORT                  "18183"
@@ -55,30 +55,31 @@ extern "C"{
 
 namespace android {
 
-class AudioEncoder : public AHandler {
+class AudioEncoder : public AHandler, public INotify {
 public:
-    AudioEncoder(sp<AMessage> notify);
+    AudioEncoder(ServerManager* manager);
     ~AudioEncoder();
-    void start();
-    void stop();
-    void startRecord();
-    void stopRecord();
+    
+public:
+    virtual int32_t notify(const char* data, int32_t size);
 
 protected:
     virtual void onMessageReceived(const sp<AMessage> &msg);
 
 private:
-    static void *_audio_socket(void *arg);
-    static void *_audio_client_socket(void *arg);
+    void serverSocket();
+    void clientSocket();
 
-    void handleRecvPCMData(const sp<AMessage> &msg);
-    void handleClientExit(const sp<AMessage> &msg);
-
-    void codecInit();
+        void codecInit();
     void codecRelease();
+
+    void encoderPCMData(sp<ABuffer> pcmdata,      int32_t sample_fmt, int32_t sample_rate, int64_t ch_layout);
+    void clientExit(int32_t socket_fd);
+
     void ffmpegInit();
     void ffmpegRelease();
-
+    
+private:
     struct client_conn {
         int32_t socket;
         int32_t status;
@@ -86,13 +87,13 @@ private:
 
     status_t err;
 
-    sp<AMessage> mNotify;
+    ServerManager* mManager;
+    
     sp<ALooper> mLooper;
     sp<MediaCodec> mCodec;
     Vector<sp<MediaCodecBuffer>> outBuffers;
     Vector<sp<MediaCodecBuffer>> inBuffers;
 
-    Mutex mLock;
     std::vector<int32_t> thread_sockets;
     std::vector<client_conn> conn_sockets;
     volatile bool is_stop;
@@ -103,6 +104,12 @@ private:
 
     std::map<int32_t, struct SwrContext*> swr_cxts;
     uint8_t *out_buf;
+
+    
+    std::thread *server_t;
+    
+    std::thread *client_t;
+    std::mutex mlock_client;
 
 };
 

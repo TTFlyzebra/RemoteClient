@@ -8,10 +8,13 @@
 
 #include "ServerManager.h"
 #include "TerminalSession.h"
-#include "FlyLog.h"
-
 #include "RtspServer.h"
 #include "Controller.h"
+#include "AudioEncoder.h"
+#include "VideoEncoder.h"
+
+#include "FlyLog.h"
+
 
 using namespace android;
 
@@ -42,12 +45,12 @@ static status_t configureSignals()
     act.sa_handler = signalCatcher;
     if (sigaction(SIGINT, &act, &gOrigSigactionINT) != 0) {
         status_t err = -errno;
-        printf("Unable to configure SIGINT handler: %s\n", strerror(errno));
+        FLOGD("Unable to configure SIGINT handler: %s\n", strerror(errno));
         return err;
     }
     if (sigaction(SIGHUP, &act, &gOrigSigactionHUP) != 0) {
         status_t err = -errno;
-        printf("Unable to configure SIGHUP handler: %s\n", strerror(errno));
+        FLOGD("Unable to configure SIGHUP handler: %s\n", strerror(errno));
         return err;
     }
     return NO_ERROR;
@@ -55,22 +58,20 @@ static status_t configureSignals()
 
 static void recvSigpipe()
 {
-    printf("NOTE:recv socket close signal!\n");
+    FLOGD("NOTE:recv socket close signal!\n");
 }
 
 int32_t main(int32_t  argc,  char*  argv[])
 {
-    printf("main client is start.\n");
+    FLOGD("main client is start.\n");
     signal(SIGPIPE, SIG_IGN);
     isStop = false;
     status_t err = configureSignals();
-    if (err != NO_ERROR) printf("configureSignals failed!");
+    if (err != NO_ERROR) FLOGD("configureSignals failed!");
 
     androidSetThreadPriority(gettid(), -10);
     sp<ProcessState> proc(ProcessState::self());
     ProcessState::self()->startThreadPool();
-
-    ServerManager *manager = new ServerManager();
 
     sp<android::ALooper> looper_ctrl = new android::ALooper;
     sp<Controller> controller = new Controller();
@@ -78,28 +79,32 @@ int32_t main(int32_t  argc,  char*  argv[])
     looper_ctrl->start(false);
     controller->start();
 
-    sp<android::ALooper> looper_rtsp = new android::ALooper;
-    sp<RtspServer> rtspserver = new RtspServer(manager);
-    looper_rtsp->registerHandler(rtspserver);
-    looper_rtsp->start(false);
-    rtspserver->start();
+    ServerManager* manager = new ServerManager();
+    RtspServer* server = new RtspServer(manager);
+    TerminalSession* session = new TerminalSession(manager);
+    sp<AudioEncoder> audio = new AudioEncoder(manager);
     
-    TerminalSession *session = new TerminalSession(manager);
+    sp<VideoEncoder> video = new VideoEncoder(manager);
+    sp<android::ALooper> looper_video = new android::ALooper;
+    looper_video->registerHandler(video);
+    looper_video->start(false);
+    video->loopStart();
 
     while(!isStop){
         usleep(1000000);
     }
+    
     controller->stop();
     looper_ctrl->unregisterHandler(controller->id());
     looper_ctrl->stop();
 
-    rtspserver->stop();
-    looper_rtsp->unregisterHandler(rtspserver->id());
-    looper_rtsp->stop();
+    looper_video->unregisterHandler(controller->id());
+    looper_video->stop();
     
+    delete server;
     delete session;
     delete manager;
     
-    printf("main client is exit.\n");
+    FLOGD("main client is exit.\n");
     return 0;
 }

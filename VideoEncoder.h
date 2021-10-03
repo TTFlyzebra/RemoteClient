@@ -6,19 +6,29 @@
 #define ANDROID_SCREENDISPLAY_H
 
 #include <media/stagefright/foundation/AMessage.h>
+#include <media/stagefright/foundation/AHandler.h>
+#include "ServerManager.h"
 
 namespace android {
 
-class ScreenDisplay : public RefBase {
+class VideoEncoder : public AHandler, public INotify {
 public:
-    ScreenDisplay(sp<AMessage> mNotify);
-    ~ScreenDisplay();
+    VideoEncoder(ServerManager* manager);
+    ~VideoEncoder();
     void startRecord();
     void stopRecord();
+    void loopStart();
+    
+public:
+    virtual int32_t notify(const char* data, int32_t size);
+    
+protected:
+    virtual void onMessageReceived(const sp<AMessage> &msg);
 
 private:
 	static void *_run_record(void *arg);
     bool isRunning = false;
+    ServerManager* mManager;
     sp<AMessage> mNotify;
 };
 

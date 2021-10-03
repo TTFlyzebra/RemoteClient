@@ -451,10 +451,10 @@ static status_t runEncoder(const sp<MediaCodec>& encoder,
                 //    fprintf(stderr, "Failed writing data to muxer (err=%d)\n", err);
                 //    return err;
                 //}
-                sp<ABuffer> buffer = ABuffer::CreateAsCopy(buffers[bufIndex]->data()+4, buffers[bufIndex]->size()-4);
+                sp<ABuffer> buffer = ABuffer::CreateAsCopy(buffers[bufIndex]->data(), buffers[bufIndex]->size());
                 sp<AMessage> notify = mNotify->dup();
                 notify->setInt32("type", kWhatVideoFrameData);
-                notify->setInt64("ptsUsec", systemTime(SYSTEM_TIME_MONOTONIC) / 10001000);
+                notify->setInt64("ptsUsec", systemTime(SYSTEM_TIME_MONOTONIC) / 1000000);
                 notify->setBuffer("data", buffer);
                 notify->post();
                 debugNumFrames++;
@@ -492,17 +492,18 @@ static status_t runEncoder(const sp<MediaCodec>& encoder,
                 newFormat->findBuffer("csd-0", &csd0);
                 sp<ABuffer> csd1;
                 newFormat->findBuffer("csd-1", &csd1);
-                int32_t sps_len = csd0->capacity() - 4;
-                int32_t pps_len = csd1->capacity() - 4;
+                int32_t sps_len = csd0->capacity();
+                int32_t pps_len = csd1->capacity();
                 char *sps_pps = (char *) malloc((sps_len+pps_len) * sizeof(char));
-                memcpy(sps_pps, csd0->base()+4, sps_len);
-                memcpy(sps_pps+sps_len, csd1->base()+4, pps_len);
+                memcpy(sps_pps, csd0->base(), sps_len);
+                memcpy(sps_pps+sps_len, csd1->base(), pps_len);
                 sp<ABuffer> spspps_buf = ABuffer::CreateAsCopy(sps_pps, sps_len+pps_len);
                 sp<AMessage> notify = mNotify->dup();
                 notify->setInt32("type", kWhatSPSPPSData);
                 notify->setInt32("sps_len", sps_len);
                 notify->setInt32("pps_len", pps_len);
                 notify->setBuffer("data", spspps_buf);
+                notify->setInt64("ptsUsec", 0);
                 notify->post();
                 free(sps_pps);
             }

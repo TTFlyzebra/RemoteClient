@@ -17,20 +17,21 @@ LOCAL_PATH:= $(call my-dir)
 include $(CLEAR_VARS)
 
 LOCAL_SRC_FILES := \
-	mobilectl.cpp \
     screenrecord.cpp \
     EglWindow.cpp \
     FrameOutput.cpp \
     TextRenderer.cpp \
     Overlay.cpp \
     Program.cpp \
+    mobilectl.cpp \
+	TerminalSession.cpp \
+    ServerManager.cpp \
+    VideoEncoder.cpp \
+    AudioEncoder.cpp \
     RtspServer.cpp \
-    ScreenDisplay.cpp \
+    RtspClient.cpp \
     Base64.cpp \
     Controller.cpp \
-    AudioEncoder.cpp \
-    TerminalSession.cpp \
-    ServerManager.cpp
 
 LOCAL_SHARED_LIBRARIES := \
 	libstagefright \
