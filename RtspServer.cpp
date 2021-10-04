@@ -56,7 +56,7 @@ RtspServer::~RtspServer()
     delete rtpudp_t;
     delete rtcpudp_t;
     delete remove_t;
-    printf("%s()\n", __func__);
+    FLOGD("%s()", __func__);
 }
 
 

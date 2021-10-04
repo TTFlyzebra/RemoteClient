@@ -21,9 +21,11 @@ RtspClient::RtspClient(RtspServer* server, ServerManager* manager, int32_t socke
 ,mSocket(socket)
 ,is_stop(false)
 ,is_disconnect(false)
+,sequencenumber1(0)
+,sequencenumber2(0)
 ,conn_type(RTP_TCP)
 {
-    FLOGD("%s()\n", __func__);
+    FLOGD("%s()", __func__);
     mManager->registerListener(this);
     recv_t = new std::thread(&RtspClient::recvThread, this);
     send_t = new std::thread(&RtspClient::sendThread, this);
@@ -50,7 +52,7 @@ RtspClient::~RtspClient()
     delete recv_t;
     delete send_t;
     delete hand_t;
-    FLOGD("%s()\n", __func__);
+    FLOGD("%s()", __func__);
 }
 
 int32_t RtspClient::notify(const char* data, int32_t size)
@@ -135,7 +137,7 @@ void RtspClient::handleData()
         char url[512] = {0};
         char ver[64] = {0};
         char action[64] = {0};
-        if(sscanf((const char*)&recvBuf[0], "%s %s %s\r\n", action, url, ver) == 3) {
+        if(sscanf((const char*)&recvBuf[0], "%s %s %s\r", action, url, ver) == 3) {
             int32_t cseq;
         	sscanf(strstr((const char*)&recvBuf[0], "CSeq"), "CSeq: %d", &cseq);
             std::string method(action);
@@ -167,7 +169,7 @@ void RtspClient::sendData(const char* data, int32_t size)
 {
     std::lock_guard<std::mutex> lock (mlock_send);
     if (sendBuf.size() > TERMINAL_MAX_BUFFER) {
-        FLOGD("NOTE::RtspClient send buffer too max, wile clean %zu size\n", sendBuf.size());
+        FLOGD("NOTE::RtspClient send buffer too max, wile clean %zu size", sendBuf.size());
     	sendBuf.clear();
     }
     sendBuf.insert(sendBuf.end(), data, data + size);
@@ -177,7 +179,7 @@ void RtspClient::sendData(const char* data, int32_t size)
 void RtspClient::appendCommonResponse(std::string *response, int32_t cseq)
 {
     char temp[16];
-    sprintf(temp, "CSeq: %d\r\n",cseq);
+    sprintf(temp, "CSeq: %d\r",cseq);
     response->append(temp);
     response->append("User-Agent: Android screen rtsp(author zebra)\r\n");
     time_t now = time(NULL);
@@ -213,7 +215,7 @@ void RtspClient::onDescribeRequest(const char* data, int32_t cseq)
     std::string spd;
     spd.append("v=0\r\n");
     char temp[128];
-    sprintf(temp, "o=- 1627453750119587 1 in IP4 %s\r\n",inet_ntoa(addr.sin_addr));
+    sprintf(temp, "o=- 1627453750119587 1 in IP4 %s\r",inet_ntoa(addr.sin_addr));
     spd.append(temp);
     spd.append("t=0 0\r\n");
     spd.append("a=contol:*\r\n");
@@ -247,7 +249,7 @@ void RtspClient::onDescribeRequest(const char* data, int32_t cseq)
     spd.append("a=control:track2\r\n\r\n");
 
     memset(temp,0,strlen(temp));
-    sprintf(temp, "Content-Length: %d\r\n",(int)spd.size());
+    sprintf(temp, "Content-Length: %d\r",(int)spd.size());
     response.append(temp);
     response.append("Content-Type: application/sdp\r\n");
     response.append("\r\n");
@@ -272,7 +274,7 @@ void RtspClient::onSetupRequest(const char* data, int32_t cseq)
     if (strncmp(strstr((const char*)data, "RTP/AVP"), "RTP/AVP/TCP", 11) == 0) {
         conn_type = RTP_TCP;
         char temp1[128];
-        sprintf(temp1, "Transport: RTP/AVP/TCP;unicast;interleaved=%d-%d\r\n", track1, track2);
+        sprintf(temp1, "Transport: RTP/AVP/TCP;unicast;interleaved=%d-%d\r", track1, track2);
         response.append(temp1);
     }else
     /*if (strncmp(strstr((const char*)data, "RTP/AVP"), "RTP/AVP/UDP", 11) == 0)*/
@@ -286,12 +288,12 @@ void RtspClient::onSetupRequest(const char* data, int32_t cseq)
         getpeername(mSocket, (struct sockaddr *)&conn_addr_in, (socklen_t*)&conn_addrLen);
         conn_addr_in.sin_port = htons(conn_rtp_port);
         char temp2[128];
-        sprintf(temp2, "Transport: RTP/AVP/UDP;unicast;client_port=%d-%d;server_port=%d-%d;interleaved=%d-%d\r\n", \
+        sprintf(temp2, "Transport: RTP/AVP/UDP;unicast;client_port=%d-%d;server_port=%d-%d;interleaved=%d-%d\r", \
                 conn_rtp_port,RTSP_SERVER_UDP_PORT1,RTSP_SERVER_UDP_PORT2, conn_rtcp_port, track1, track2);
         response.append(temp2);
     }
     char temp[128];
-    sprintf(temp, "Session: %d\r\n",mSocket);
+    sprintf(temp, "Session: %d\r",mSocket);
     response.append(temp);
     response.append("\r\n");
     conn_status = S_SETUP;
@@ -308,7 +310,7 @@ void RtspClient::onPlayRequest(const char* data, int32_t cseq)
     appendCommonResponse(&response, cseq);
     response.append("Range: npt=0.000-\r\n");
     char temp[128];
-    sprintf(temp, "Session: %d\r\n",mSocket);
+    sprintf(temp, "Session: %d\r",mSocket);
     response.append(temp);
     response.append("\r\n");
     if(conn_type==RTP_TCP){
@@ -392,7 +394,7 @@ void RtspClient::sendVFrame(const     char* video, int32_t size, int64_t ptsUsec
         rtp_pack[4]  = 0x80;
         rtp_pack[5]  = 0x60;
         rtp_pack[6]  = (sequencenumber1 & 0xFF00) >> 8;
-        rtp_pack[7]  = sequencenumber1 & 0xFF;
+        rtp_pack[7]  =  sequencenumber1 & 0xFF;
         rtp_pack[8]  = (ptsUsec & 0xFF000000) >> 24;
         rtp_pack[9]  = (ptsUsec & 0xFF0000) >> 16;
         rtp_pack[10] = (ptsUsec & 0xFF00) >> 8;
@@ -421,7 +423,7 @@ void RtspClient::sendVFrame(const     char* video, int32_t size, int64_t ptsUsec
             rtp_pack[4]  = 0x80;
             rtp_pack[5]  = 0x60;
             rtp_pack[6]  = (sequencenumber1 & 0xFF00) >> 8;
-            rtp_pack[7]  = sequencenumber1 & 0xFF;
+            rtp_pack[7]  =  sequencenumber1 & 0xFF;
             rtp_pack[8]  = (ptsUsec & 0xFF000000) >> 24;
             rtp_pack[9]  = (ptsUsec & 0xFF0000) >> 16;
             rtp_pack[10] = (ptsUsec & 0xFF00) >> 8;
@@ -447,7 +449,7 @@ void RtspClient::sendVFrame(const     char* video, int32_t size, int64_t ptsUsec
 void RtspClient::sendAFrame(const     char* audio, int32_t size, int64_t ptsUsec)
 {
     if(size<=0 || is_stop) return;
-    sequencenumber1++;
+    sequencenumber2++;
     char rtp_pack[20];
     rtp_pack[0]  = '$';
     rtp_pack[1]  = 0x02;
@@ -455,8 +457,8 @@ void RtspClient::sendAFrame(const     char* audio, int32_t size, int64_t ptsUsec
     rtp_pack[3]  = (size+16) & 0xFF;
     rtp_pack[4]  = 0x80;
     rtp_pack[5]  = 0x61;
-    rtp_pack[6]  = (sequencenumber1 & 0xFF00) >> 8;
-    rtp_pack[7]  = sequencenumber1 & 0xFF;
+    rtp_pack[6]  = (sequencenumber2 & 0xFF00) >> 8;
+    rtp_pack[7]  =  sequencenumber2 & 0xFF;
     rtp_pack[8]  = (ptsUsec & 0xFF000000) >> 24;
     rtp_pack[9]  = (ptsUsec & 0xFF0000) >> 16;
     rtp_pack[10] = (ptsUsec & 0xFF00) >> 8;

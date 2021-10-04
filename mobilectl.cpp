@@ -45,12 +45,12 @@ static status_t configureSignals()
     act.sa_handler = signalCatcher;
     if (sigaction(SIGINT, &act, &gOrigSigactionINT) != 0) {
         status_t err = -errno;
-        FLOGD("Unable to configure SIGINT handler: %s\n", strerror(errno));
+        FLOGD("Unable to configure SIGINT handler: %s", strerror(errno));
         return err;
     }
     if (sigaction(SIGHUP, &act, &gOrigSigactionHUP) != 0) {
         status_t err = -errno;
-        FLOGD("Unable to configure SIGHUP handler: %s\n", strerror(errno));
+        FLOGD("Unable to configure SIGHUP handler: %s", strerror(errno));
         return err;
     }
     return NO_ERROR;

@@ -9,7 +9,7 @@
 ServerManager::ServerManager()
 :is_stop(false)
 {
-    FLOGD("%s()\n", __func__);
+    FLOGD("%s()", __func__);
     data_t = new std::thread(&ServerManager::handleData, this);
 }
 
@@ -22,7 +22,7 @@ ServerManager::~ServerManager()
     }
     data_t->join();
     delete data_t;
-    FLOGD("%s()\n", __func__);
+    FLOGD("%s()", __func__);
 }
 
 void ServerManager::registerListener(INotify* notify)
@@ -71,9 +71,9 @@ void ServerManager::handleData()
             //for (int32_t i = 0; i < 8; i++) {
             //    sprintf(temp, "%s%02x:", temp, dataBuf[i]);
             //}
-            //FLOGE("notify:->%s\n", temp);
+            //FLOGE("notify:->%s", temp);
             if(((dataBuf[0]&0xFF)!=0xEE)||((dataBuf[1]&0xFF)!=0xAA)){
-                FLOGE("handleData bad header[%02x:%02x]\n", dataBuf[0], dataBuf[1]);
+                FLOGE("handleData bad header[%02x:%02x]", dataBuf[0], dataBuf[1]);
                 dataBuf.clear();
                 continue;
             }

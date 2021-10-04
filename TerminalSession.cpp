@@ -17,7 +17,7 @@ TerminalSession::TerminalSession(ServerManager* manager)
 ,is_stop(false)
 ,is_connect(false)
 {
-    printf("%s()\n", __func__);
+    FLOGD("%s()", __func__);
     mManager->registerListener(this);
     recv_t = new std::thread(&TerminalSession::connThread, this);
     send_t = new std::thread(&TerminalSession::sendThread, this);
@@ -44,7 +44,7 @@ TerminalSession::~TerminalSession()
     delete recv_t;
     delete send_t;
     delete hand_t;
-    printf("%s()\n", __func__);
+    FLOGD("%s()", __func__);
 }
 
 int32_t TerminalSession::notify(const char* data, int32_t size)
@@ -54,13 +54,13 @@ int32_t TerminalSession::notify(const char* data, int32_t size)
     for (int32_t i = 0; i < 10; i++) {
         sprintf(temp, "%s%02x:", temp, data[i]);
     }
-    //printf("TerminalSession->notify->%s[%d]\n", temp, size);
+    //printf("TerminalSession->notify->%s[%d]", temp, size);
     return -1;
 }
 
 void TerminalSession::connThread()
 {
-    printf("%s() start!\n", __func__);   
+    FLOGD("%s() start!", __func__);   
     char tempBuf[4096];
     while(!is_stop){
         if(!is_connect){
@@ -71,7 +71,7 @@ void TerminalSession::connThread()
             servaddr.sin_port = htons(TERMINAL_SERVER_TCP_PORT);
             servaddr.sin_addr.s_addr = inet_addr("192.168.1.88");
             if (connect(mSocket, (struct sockaddr *) &servaddr, sizeof(servaddr)) != 0) {
-                printf("connect failed! %s errno :%d\n", strerror(errno), errno);
+                FLOGD("connect failed! %s errno :%d", strerror(errno), errno);
                 close(mSocket);
                 for(int i=0;i<3000;i++){
                     if(is_stop) break;
@@ -89,7 +89,7 @@ void TerminalSession::connThread()
             }
         }else{
             int recvLen = recv(mSocket, tempBuf, 4096, 0);
-            printf("recv data size[%d], errno=%d.\n", recvLen, errno);
+            FLOGD("recv data size[%d], errno=%d.", recvLen, errno);
             if(recvLen==0 || (!(errno==11 || errno== 0))) {
                 //TODO::disconnect
                 is_connect = false;
@@ -102,12 +102,12 @@ void TerminalSession::connThread()
             }
         }
     }
-    printf("%s() exit!\n", __func__);
+    FLOGD("%s() exit!", __func__);
 }
 
 void TerminalSession::sendThread()
 {
-    printf("%s() start!\n", __func__);
+    FLOGD("%s() start!", __func__);
     while (!is_stop) {
         {
             std::unique_lock<std::mutex> lock (mlock_conn);
@@ -126,7 +126,7 @@ void TerminalSession::sendThread()
         	int32_t dataSize = sendBuf.size();
         	while(!is_stop && sendSize<dataSize){
         	    int32_t sendLen = send(mSocket,(const char*)&sendBuf[sendSize],dataSize-sendSize, 0);
-        	    printf("%s sendLen=%d, errno=%d.\n", __func__, sendLen, errno);
+        	    FLOGD("%s sendLen=%d, errno=%d.", __func__, sendLen, errno);
         	    if (sendLen <= 0) {
         	        if(errno != 11 || errno!= 0) {
         	            //TODO::disconnect
@@ -141,12 +141,12 @@ void TerminalSession::sendThread()
         	sendBuf.clear();
         }
     }
-    printf("%s() exit!\n", __func__);
+    FLOGD("%s() exit!", __func__);
 }
 
 void TerminalSession::handThread()
 {
-    printf("%s() start!\n", __func__);
+    FLOGD("%s() start!", __func__);
     while(!is_stop){
         {
             std::lock_guard<std::mutex> lock (mlock_send);
@@ -158,5 +158,5 @@ void TerminalSession::handThread()
             usleep(1000);
         }
     }
-    printf("%s() exit!\n", __func__);
+    FLOGD("%s() exit!", __func__);
 }

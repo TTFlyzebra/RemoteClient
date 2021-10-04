@@ -77,8 +77,8 @@ private:
     std::mutex mlock_recv;
     std::condition_variable mcond_recv;
 
-    int32_t sequencenumber1 = 0;
-	//int32_t sequencenumber2 = 0;
+    int32_t sequencenumber1;
+	int32_t sequencenumber2;
 
     int32_t conn_type;
     int32_t conn_status;
