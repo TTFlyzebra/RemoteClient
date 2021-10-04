@@ -21,8 +21,8 @@ public:
 
 private:
     void disConnect();
-    void sendThread();
     void recvThread();
+    void sendThread();
     void handleData();
     void sendData(const char* data, int32_t size);
 

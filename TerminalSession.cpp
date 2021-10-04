@@ -58,12 +58,16 @@ TerminalSession::~TerminalSession()
 
 int32_t TerminalSession::notify(const char* data, int32_t size)
 {
-    //char temp[4096] = {0};
-    //memset(temp,0,4096);
-    //for (int32_t i = 0; i < 10; i++) {
-    //    sprintf(temp, "%s%02x:", temp, data[i]);
-    //}
-    //FLOGD("TerminalSession->notify->%s[%d]", temp, size);
+    struct NotifyData* notifyData = (struct NotifyData*)data;
+    int32_t len = data[6]<<24|data[7]<<16|data[8]<<8|data[9];
+    int32_t pts = data[18]<<24|data[19]<<16|data[20]<<8|data[21];
+    switch (notifyData->type){
+    case 0x0302:
+    case 0x0402:
+    case 0x0502:
+        sendData(data, size);
+        return -1;
+    }
     return -1;
 }
 

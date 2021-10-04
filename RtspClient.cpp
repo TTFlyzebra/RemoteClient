@@ -74,6 +74,27 @@ int32_t RtspClient::notify(const char* data, int32_t size)
     return -1;
 }
 
+void RtspClient::recvThread()
+{
+    char tempBuf[4096];
+    while(!is_stop){
+        memset(tempBuf,0,4096);
+        int recvLen = recv(mSocket, tempBuf, 4096, 0);
+        FLOGD("RtspClient recv:len=[%d], errno=[%d]\n%s", recvLen, errno, tempBuf);
+        if (recvLen <= 0) {
+            if(recvLen==0 || (!(errno==11 || errno== 0))) {
+                is_stop = true;
+                break;
+            }
+        }else{
+            std::lock_guard<std::mutex> lock (mlock_recv);
+            recvBuf.insert(recvBuf.end(), tempBuf, tempBuf+recvLen);
+            mcond_recv.notify_one();
+        }
+    }
+    disConnect();
+}
+
 void RtspClient::sendThread()
 {
     while (!is_stop) {
@@ -94,27 +115,6 @@ void RtspClient::sendThread()
                 sendBuf.erase(sendBuf.begin(),sendBuf.begin()+sendLen);
     	    }
     	}
-    }
-    disConnect();
-}
-
-void RtspClient::recvThread()
-{
-    char tempBuf[4096];
-    while(!is_stop){
-        memset(tempBuf,0,4096);
-        int recvLen = recv(mSocket, tempBuf, 4096, 0);
-        FLOGD("RtspClient recv:len=[%d], errno=[%d]\n%s", recvLen, errno, tempBuf);
-        if (recvLen <= 0) {
-            if(recvLen==0 || (!(errno==11 || errno== 0))) {
-                is_stop = true;
-                break;
-            }
-        }else{
-            std::lock_guard<std::mutex> lock (mlock_recv);
-            recvBuf.insert(recvBuf.end(), tempBuf, tempBuf+recvLen);
-            mcond_recv.notify_one();
-        }
     }
     disConnect();
 }
