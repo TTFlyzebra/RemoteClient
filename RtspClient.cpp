@@ -320,7 +320,7 @@ void RtspClient::onPlayRequest(const char* data, int32_t cseq)
     }
     {
         std::lock_guard<std::mutex> lock (mManager->mlock_up);
-        mManager->updataAsync(encoderstart, sizeof(encoderstart));
+        mManager->updataAsync((const char*)encoderstart, sizeof(encoderstart));
     }
 }
 
