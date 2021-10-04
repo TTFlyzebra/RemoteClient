@@ -49,12 +49,12 @@ TerminalSession::~TerminalSession()
 
 int32_t TerminalSession::notify(const char* data, int32_t size)
 {
-    char temp[4096] = {0};
-    memset(temp,0,4096);
-    for (int32_t i = 0; i < 10; i++) {
-        sprintf(temp, "%s%02x:", temp, data[i]);
-    }
-    //printf("TerminalSession->notify->%s[%d]", temp, size);
+    //char temp[4096] = {0};
+    //memset(temp,0,4096);
+    //for (int32_t i = 0; i < 10; i++) {
+    //    sprintf(temp, "%s%02x:", temp, data[i]);
+    //}
+    //FLOGD("TerminalSession->notify->%s[%d]", temp, size);
     return -1;
 }
 
