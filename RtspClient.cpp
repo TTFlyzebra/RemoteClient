@@ -62,13 +62,13 @@ int32_t RtspClient::notify(const char* data, int32_t size)
     int32_t pts = data[18]<<24|data[19]<<16|data[20]<<8|data[21];
     switch (notifyData->type){
     case 0x0302:
-        sendSPSPPS(data+22, len-10, pts);
+        sendSPSPPS(data+22, len-12, pts);
         return -1;
     case 0x0402:
-        sendVFrame(data+22, len-10, pts);
+        sendVFrame(data+22, len-12, pts);
         return -1;
     case 0x0502:
-        sendAFrame(data+22, len-10, pts);
+        sendAFrame(data+22, len-12, pts);
         return -1;
     }
     return -1;
