@@ -317,6 +317,7 @@ void EncoderAudio::codecRelease()
     if(mLooper!=nullptr){
         mLooper->unregisterHandler(id());
         mLooper->stop();
+        mLooper = nullptr;
     }
 }
 
