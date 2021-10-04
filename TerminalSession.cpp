@@ -71,7 +71,7 @@ void TerminalSession::connThread()
             servaddr.sin_port = htons(TERMINAL_SERVER_TCP_PORT);
             servaddr.sin_addr.s_addr = inet_addr("192.168.1.88");
             if (connect(mSocket, (struct sockaddr *) &servaddr, sizeof(servaddr)) != 0) {
-                FLOGD("connect failed! %s errno :%d", strerror(errno), errno);
+                FLOGD("TerminalSession connect failed! %s errno :%d", strerror(errno), errno);
                 close(mSocket);
                 for(int i=0;i<3000;i++){
                     if(is_stop) break;
@@ -126,7 +126,7 @@ void TerminalSession::sendThread()
         	int32_t dataSize = sendBuf.size();
         	while(!is_stop && sendSize<dataSize){
         	    int32_t sendLen = send(mSocket,(const char*)&sendBuf[sendSize],dataSize-sendSize, 0);
-        	    FLOGD("%s sendLen=%d, errno=%d.", __func__, sendLen, errno);
+        	    //FLOGD("TerminalSession sendLen=%d, errno=%d.", sendLen, errno);
         	    if (sendLen <= 0) {
         	        if(errno != 11 || errno!= 0) {
         	            //TODO::disconnect

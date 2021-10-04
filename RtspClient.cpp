@@ -179,7 +179,7 @@ void RtspClient::sendData(const char* data, int32_t size)
 void RtspClient::appendCommonResponse(std::string *response, int32_t cseq)
 {
     char temp[16];
-    sprintf(temp, "CSeq: %d\r",cseq);
+    sprintf(temp, "CSeq: %d\r\n",cseq);
     response->append(temp);
     response->append("User-Agent: Android screen rtsp(author zebra)\r\n");
     time_t now = time(NULL);
@@ -215,7 +215,7 @@ void RtspClient::onDescribeRequest(const char* data, int32_t cseq)
     std::string spd;
     spd.append("v=0\r\n");
     char temp[128];
-    sprintf(temp, "o=- 1627453750119587 1 in IP4 %s\r",inet_ntoa(addr.sin_addr));
+    sprintf(temp, "o=- 1627453750119587 1 in IP4 %s\r\n",inet_ntoa(addr.sin_addr));
     spd.append(temp);
     spd.append("t=0 0\r\n");
     spd.append("a=contol:*\r\n");
@@ -249,7 +249,7 @@ void RtspClient::onDescribeRequest(const char* data, int32_t cseq)
     spd.append("a=control:track2\r\n\r\n");
 
     memset(temp,0,strlen(temp));
-    sprintf(temp, "Content-Length: %d\r",(int)spd.size());
+    sprintf(temp, "Content-Length: %d\r\n",(int)spd.size());
     response.append(temp);
     response.append("Content-Type: application/sdp\r\n");
     response.append("\r\n");
@@ -274,7 +274,7 @@ void RtspClient::onSetupRequest(const char* data, int32_t cseq)
     if (strncmp(strstr((const char*)data, "RTP/AVP"), "RTP/AVP/TCP", 11) == 0) {
         conn_type = RTP_TCP;
         char temp1[128];
-        sprintf(temp1, "Transport: RTP/AVP/TCP;unicast;interleaved=%d-%d\r", track1, track2);
+        sprintf(temp1, "Transport: RTP/AVP/TCP;unicast;interleaved=%d-%d\r\n", track1, track2);
         response.append(temp1);
     }else
     /*if (strncmp(strstr((const char*)data, "RTP/AVP"), "RTP/AVP/UDP", 11) == 0)*/
@@ -293,7 +293,7 @@ void RtspClient::onSetupRequest(const char* data, int32_t cseq)
         response.append(temp2);
     }
     char temp[128];
-    sprintf(temp, "Session: %d\r",mSocket);
+    sprintf(temp, "Session: %d\r\n",mSocket);
     response.append(temp);
     response.append("\r\n");
     conn_status = S_SETUP;
@@ -310,7 +310,7 @@ void RtspClient::onPlayRequest(const char* data, int32_t cseq)
     appendCommonResponse(&response, cseq);
     response.append("Range: npt=0.000-\r\n");
     char temp[128];
-    sprintf(temp, "Session: %d\r",mSocket);
+    sprintf(temp, "Session: %d\r\n",mSocket);
     response.append(temp);
     response.append("\r\n");
     if(conn_type==RTP_TCP){
