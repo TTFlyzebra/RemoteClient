@@ -8,7 +8,7 @@
 #include <netinet/in.h>
 #include <cutils/properties.h>
 
-#include "AudioEncoder.h"
+#include "EncoderAudio.h"
 #include "FlyLog.h"
 #include "HandlerEvent.h"
 #include "Command.h"
@@ -16,18 +16,19 @@
 
 using namespace android;
 
-AudioEncoder::AudioEncoder(ServerManager* manager)
-:mManager(manager),
-is_stop(false),
-is_running(false),
-is_codec(false),
-out_buf((uint8_t *)av_malloc(OUT_SAMPLE_RATE))
+EncoderAudio::EncoderAudio(ServerManager* manager)
+:mManager(manager)
+,is_stop(false)
+,is_running(false)
+,is_codec(false)
+,out_buf((uint8_t *)av_malloc(OUT_SAMPLE_RATE))
+,mClientNums(0)
 {
     mManager->registerListener(this);
-    server_t = new std::thread(&AudioEncoder::serverSocket, this);
+    server_t = new std::thread(&EncoderAudio::serverSocket, this);
 }
 
-AudioEncoder::~AudioEncoder()
+EncoderAudio::~EncoderAudio()
 {
     is_stop = true;
     mManager->unRegisterListener(this);
@@ -42,35 +43,35 @@ AudioEncoder::~AudioEncoder()
     delete server_t;
 }
 
-int32_t AudioEncoder::notify(const char* data, int32_t size)
+int32_t EncoderAudio::notify(const char* data, int32_t size)
 {
     struct NotifyData* notifyData = (struct NotifyData*)data;
     switch (notifyData->type){
     case 0x0102:
-        if(!is_codec) codecInit(); 
+        if(mClientNums<=1) codecInit(); 
         return -1;
     case 0x0202:
-        codecRelease();
+        if(mClientNums<=0)codecRelease();
         return -1;
     }
     return -1;
 }
 
-void AudioEncoder::onMessageReceived(const sp<AMessage> &msg)
+void EncoderAudio::onMessageReceived(const sp<AMessage> &msg)
 {
 
 }
 
-void AudioEncoder::serverSocket()
+void EncoderAudio::serverSocket()
 {
-	FLOGD("AudioEncoder serverSocket start!");
+	FLOGD("EncoderAudio serverSocket start!");
 	int32_t ret;
 	char temp[PROPERTY_VALUE_MAX] = {0};
 	property_get(PROP_IP, temp, SERVER_IP);
 	if(temp[0]<'0' || temp[0] > '9'){
 	    server_socket = socket_local_server(temp, ANDROID_SOCKET_NAMESPACE_ABSTRACT, SOCK_STREAM);
 	    if (server_socket < 0) {
-	       FLOGE("AudioEncoder localsocket server error %s errno: %d", strerror(errno), errno);
+	       FLOGE("EncoderAudio localsocket server error %s errno: %d", strerror(errno), errno);
 	       return;
 	    }
 	} else {
@@ -81,43 +82,43 @@ void AudioEncoder::serverSocket()
         t_sockaddr.sin_port = htons(AUDIO_SERVER_TCP_PORT);
         server_socket = socket(AF_INET, SOCK_STREAM, 0);
         if (server_socket < 0) {
-            FLOGE("AudioEncoder socket server error %s errno: %d", strerror(errno), errno);
+            FLOGE("EncoderAudio socket server error %s errno: %d", strerror(errno), errno);
             return;
         }
         ret = bind(server_socket,(struct sockaddr *) &t_sockaddr,sizeof(t_sockaddr));
         if (ret < 0) {
-            FLOGE( "AudioEncoder bind %d socket error %s errno: %d", AUDIO_SERVER_TCP_PORT, strerror(errno), errno);
+            FLOGE( "EncoderAudio bind %d socket error %s errno: %d", AUDIO_SERVER_TCP_PORT, strerror(errno), errno);
             return;
         }
     }
     ret = listen(server_socket, 5);
     if (ret < 0) {
-        FLOGE("AudioEncoder listen error %s errno: %d", strerror(errno), errno);
+        FLOGE("EncoderAudio listen error %s errno: %d", strerror(errno), errno);
         return;
     }
     while(!is_stop) {
         int32_t client_socket = accept(server_socket, (struct sockaddr*)NULL, NULL);
         if(client_socket < 0) {
-            FLOGE("AudioEncoder accpet socket error: %s errno :%d", strerror(errno), errno);
+            FLOGE("EncoderAudio accpet socket error: %s errno :%d", strerror(errno), errno);
             continue;
         }
         if(is_stop) break;
         {
             std::lock_guard<std::mutex> lock (mlock_client);
-            client_t = new std::thread(&AudioEncoder::clientSocket, this);
+            client_t = new std::thread(&EncoderAudio::clientSocket, this);
             thread_sockets.push_back(client_socket);
             client_t->detach();
         }
     }
     
     close(server_socket);
-    FLOGD("AudioEncoder serverSocket exit!");
+    FLOGD("EncoderAudio serverSocket exit!");
 	return;
 }
 
-void AudioEncoder::clientSocket()
+void EncoderAudio::clientSocket()
 {
-    FLOGD("AudioEncoder clientSocket start!");
+    FLOGD("EncoderAudio clientSocket start!");
     int32_t socket_fd;
     {
 	    std::lock_guard<std::mutex> lock (mlock_client);
@@ -154,7 +155,7 @@ void AudioEncoder::clientSocket()
 
         if ((recvBuf[8]!=(unsigned char)0x04) || (recvBuf[9]!=(unsigned char)0x4B)){
             recvLen = recv(socket_fd, recvBuf, 4096, 0);
-            FLOGE("AudioEncoder recv other audio recvLen=%d", recvLen);
+            FLOGE("EncoderAudio recv other audio recvLen=%d", recvLen);
             continue;
         }
 
@@ -188,14 +189,14 @@ void AudioEncoder::clientSocket()
 audio_exit:
     clientExit(socket_fd);
     close(socket_fd);
-	FLOGD("AudioEncoder clientSocket exit!");
+	FLOGD("EncoderAudio clientSocket exit!");
 	return;
 }
 
-void AudioEncoder::codecInit()
+void EncoderAudio::codecInit()
 {
     mLooper = new ALooper;
-    mLooper->setName("AudioEncoder_looper");
+    mLooper->setName("EncoderAudio_looper");
     mLooper->start(false);
     mCodec = MediaCodec::CreateByType(mLooper, AUDIO_MIMETYPE, true);
     if (mCodec == nullptr) {
@@ -231,7 +232,7 @@ void AudioEncoder::codecInit()
     is_codec = true;
 }
 
-void AudioEncoder::codecRelease()
+void EncoderAudio::codecRelease()
 {
     is_codec = false;
     
@@ -246,7 +247,7 @@ void AudioEncoder::codecRelease()
     }
 }
 
-void AudioEncoder::encoderPCMData(sp<ABuffer> pcmdata,      int32_t sample_fmt, int32_t sample_rate, int64_t ch_layout)
+void EncoderAudio::encoderPCMData(sp<ABuffer> pcmdata,      int32_t sample_fmt, int32_t sample_rate, int64_t ch_layout)
 {
     int32_t key = ((ch_layout<<24)&0xFF000000)+((sample_fmt<<16)&0x00FF0000)+(sample_rate&0x0000FFFF);
     int64_t ptsUsec = systemTime(SYSTEM_TIME_MONOTONIC) / 1000000;
@@ -343,7 +344,7 @@ void AudioEncoder::encoderPCMData(sp<ABuffer> pcmdata,      int32_t sample_fmt, 
                 err = mCodec->releaseOutputBuffer(outIndex);
                 break;
             case INFO_OUTPUT_BUFFERS_CHANGED:
-                FLOGE("AudioEncoder INFO_OUTPUT_BUFFERS_CHANGED");
+                FLOGE("EncoderAudio INFO_OUTPUT_BUFFERS_CHANGED");
                 err = mCodec->getOutputBuffers(&outBuffers);
                 break;
             case -EAGAIN:
@@ -356,7 +357,7 @@ void AudioEncoder::encoderPCMData(sp<ABuffer> pcmdata,      int32_t sample_fmt, 
     }
 }
 
-void AudioEncoder::clientExit(int32_t socket_fd)
+void EncoderAudio::clientExit(int32_t socket_fd)
 {
     int32_t size = conn_sockets.empty()?0:((int)conn_sockets.size());
     for(int32_t i=0; i<size; i++){
@@ -365,5 +366,5 @@ void AudioEncoder::clientExit(int32_t socket_fd)
             break;
         }
     }
-    FLOGD("AudioEncoder conn_sockets size=%d.", conn_sockets.empty()?0:((int)conn_sockets.size()));
+    FLOGD("EncoderAudio conn_sockets size=%d.", conn_sockets.empty()?0:((int)conn_sockets.size()));
 }

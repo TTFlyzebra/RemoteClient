@@ -11,10 +11,10 @@
 
 namespace android {
 
-class VideoEncoder : public AHandler, public INotify {
+class EncoderVideo : public AHandler, public INotify {
 public:
-    VideoEncoder(ServerManager* manager);
-    ~VideoEncoder();
+    EncoderVideo(ServerManager* manager);
+    ~EncoderVideo();
     void startRecord();
     void stopRecord();
     void loopStart();
@@ -30,6 +30,7 @@ private:
     bool isRunning = false;
     ServerManager* mManager;
     sp<AMessage> mNotify;
+    volatile int32_t mClientNums;
 };
 
 }; // namespace android

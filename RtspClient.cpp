@@ -95,11 +95,7 @@ void RtspClient::sendThread()
     	    }
     	}
     }
-    
-    if(!is_disconnect){
-        is_disconnect = true;
-        mServer->disconnectClient(this);
-    }
+    disConnect();
 }
 
 void RtspClient::recvThread()
@@ -120,10 +116,7 @@ void RtspClient::recvThread()
             mcond_recv.notify_one();
         }
     }
-    if(!is_disconnect){
-        is_disconnect = true;
-        mServer->disconnectClient(this);
-    }
+    disConnect();
 }
 
 void RtspClient::handleData()
@@ -175,6 +168,18 @@ void RtspClient::sendData(const char* data, int32_t size)
     sendBuf.insert(sendBuf.end(), data, data + size);
     mcond_send.notify_one();
 }
+
+
+void RtspClient::disConnect()
+{
+    if(!is_disconnect){
+        is_disconnect = true;
+        mServer->disconnectClient(this);
+        std::lock_guard<std::mutex> lock (mManager->mlock_up);
+        mManager->updataAsync((const char*)encoderstop,sizeof(encoderstop));
+    }
+}
+
 
 void RtspClient::appendCommonResponse(std::string *response, int32_t cseq)
 {

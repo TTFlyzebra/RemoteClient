@@ -220,10 +220,6 @@ void RtspServer::removeClient()
             remove_clients.clear();
         }
         FLOGD("RtspServer::removeClient rtsp_clients.size=%zu", rtsp_clients.size());
-        if(rtsp_clients.empty()) {
-            std::lock_guard<std::mutex> lock (mManager->mlock_up);
-            mManager->updataAsync((const char*)encoderstop,sizeof(encoderstop));
-        }
     }
 }
 

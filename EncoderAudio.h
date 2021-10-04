@@ -2,8 +2,8 @@
 // Created by FlyZebra on 2021/8/12 0012.
 //
 
-#ifndef ANDROID_AudioEncoder_H
-#define ANDROID_AudioEncoder_H
+#ifndef ANDROID_EncoderAudio_H
+#define ANDROID_EncoderAudio_H
 
 #include <binder/IPCThreadState.h>
 #include <gui/Surface.h>
@@ -55,10 +55,10 @@ extern "C"{
 
 namespace android {
 
-class AudioEncoder : public AHandler, public INotify {
+class EncoderAudio : public AHandler, public INotify {
 public:
-    AudioEncoder(ServerManager* manager);
-    ~AudioEncoder();
+    EncoderAudio(ServerManager* manager);
+    ~EncoderAudio();
     
 public:
     virtual int32_t notify(const char* data, int32_t size);
@@ -70,7 +70,7 @@ private:
     void serverSocket();
     void clientSocket();
 
-        void codecInit();
+    void codecInit();
     void codecRelease();
 
     void encoderPCMData(sp<ABuffer> pcmdata,      int32_t sample_fmt, int32_t sample_rate, int64_t ch_layout);
@@ -111,8 +111,10 @@ private:
     std::thread *client_t;
     std::mutex mlock_client;
 
+    volatile int32_t mClientNums;
+
 };
 
 }; // namespace android
 
-#endif //ANDROID_AudioEncoder_H
+#endif //ANDROID_EncoderAudio_H

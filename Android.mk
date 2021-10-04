@@ -26,8 +26,8 @@ LOCAL_SRC_FILES := \
     mobilectl.cpp \
 	TerminalSession.cpp \
     ServerManager.cpp \
-    VideoEncoder.cpp \
-    AudioEncoder.cpp \
+    EncoderVideo.cpp \
+    EncoderAudio.cpp \
     RtspServer.cpp \
     RtspClient.cpp \
     Base64.cpp \

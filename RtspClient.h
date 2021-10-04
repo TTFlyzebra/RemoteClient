@@ -30,6 +30,7 @@ public:
     virtual int32_t notify(const char* data, int32_t size);
 
 private:
+    void disConnect();
     void sendThread();
     void recvThread();
     void handleData();

@@ -4,7 +4,7 @@
 #include <media/stagefright/foundation/ADebug.h>
 #include <media/stagefright/foundation/ABuffer.h>
 
-#include "VideoEncoder.h"
+#include "EncoderVideo.h"
 #include "FlyLog.h"
 #include "screenrecord.h"
 #include "HandlerEvent.h"
@@ -12,32 +12,39 @@
 
 using namespace android;
 
-VideoEncoder::VideoEncoder(ServerManager* manager)
+EncoderVideo::EncoderVideo(ServerManager* manager)
 :mManager(manager)
+,mClientNums(0)
 {
     mManager->registerListener(this);
 }
 
-VideoEncoder::~VideoEncoder()
+EncoderVideo::~EncoderVideo()
 {
     mManager->unRegisterListener(this);
 }
 
-int32_t VideoEncoder::notify(const char* data, int32_t size)
+int32_t EncoderVideo::notify(const char* data, int32_t size)
 {
     struct NotifyData* notifyData = (struct NotifyData*)data;
     switch (notifyData->type){
     case 0x0102:
-        startRecord();
+        mClientNums++;
+        if(mClientNums<=1){
+            startRecord();
+        }
         return -1;
     case 0x0202:
-        stopRecord();
+        mClientNums--;
+        if(mClientNums<=0){
+            stopRecord();
+        }
         return -1;
     }
     return -1;
 }
 
-void VideoEncoder::onMessageReceived(const sp<AMessage> &msg)
+void EncoderVideo::onMessageReceived(const sp<AMessage> &msg)
 {
     switch (msg->what()) {
    	    case kWhatMediaNotify:
@@ -89,18 +96,18 @@ void VideoEncoder::onMessageReceived(const sp<AMessage> &msg)
    }
 }
 
-void VideoEncoder::loopStart()
+void EncoderVideo::loopStart()
 {
     mNotify = new AMessage(kWhatMediaNotify, this);
 }
 
 
-void VideoEncoder::startRecord()
+void EncoderVideo::startRecord()
 {
     if(isRunning) return;
-    FLOGD("VideoEncoder::startRecord()");
+    FLOGD("EncoderVideo::startRecord()");
     if(isRunning){
-        FLOGE("VideoEncoder is running, exit!");
+        FLOGE("EncoderVideo is running, exit!");
         return;
     }
     pthread_t run_tid;
@@ -110,20 +117,20 @@ void VideoEncoder::startRecord()
     }
 }
 
-void *VideoEncoder::_run_record(void *argv)
+void *EncoderVideo::_run_record(void *argv)
 {
-    FLOGD("VideoEncoder::_run_record() start!");
-    auto *p=(VideoEncoder *)argv;
+    FLOGD("EncoderVideo::_run_record() start!");
+    auto *p=(EncoderVideo *)argv;
     p->isRunning = true;
     screenrecord_start(p->mNotify);
     p->isRunning = false;
-    FLOGD("VideoEncoder::_run_record() exit!");
+    FLOGD("EncoderVideo::_run_record() exit!");
     return 0;
 }
 
-void VideoEncoder::stopRecord()
+void EncoderVideo::stopRecord()
 {
-    FLOGD("VideoEncoder::stopRecord()");
+    FLOGD("EncoderVideo::stopRecord()");
     screenrecord_stop();
     usleep(100000);
     while(isRunning){

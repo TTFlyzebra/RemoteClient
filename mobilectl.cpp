@@ -10,9 +10,8 @@
 #include "TerminalSession.h"
 #include "RtspServer.h"
 #include "Controller.h"
-#include "AudioEncoder.h"
-#include "VideoEncoder.h"
-
+#include "EncoderAudio.h"
+#include "EncoderVideo.h"
 #include "FlyLog.h"
 
 
@@ -82,9 +81,9 @@ int32_t main(int32_t  argc,  char*  argv[])
     ServerManager* manager = new ServerManager();
     RtspServer* server = new RtspServer(manager);
     TerminalSession* session = new TerminalSession(manager);
-    sp<AudioEncoder> audio = new AudioEncoder(manager);
+    sp<EncoderAudio> audio = new EncoderAudio(manager);
     
-    sp<VideoEncoder> video = new VideoEncoder(manager);
+    sp<EncoderVideo> video = new EncoderVideo(manager);
     sp<android::ALooper> looper_video = new android::ALooper;
     looper_video->registerHandler(video);
     looper_video->start(false);
