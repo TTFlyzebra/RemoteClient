@@ -34,14 +34,14 @@ private:
     volatile bool is_disconnect;
     
     std::thread *send_t;
-    std::vector<char> sendBuf;
     std::mutex mlock_send;
+    std::vector<char> sendBuf;
     std::condition_variable mcond_send;
 
     std::thread *recv_t;
     std::thread *hand_t;
-    std::vector<char> recvBuf;
     std::mutex mlock_recv;
+    std::vector<char> recvBuf;
     std::condition_variable mcond_recv;
 
 };

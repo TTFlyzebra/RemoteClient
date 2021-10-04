@@ -39,12 +39,12 @@ private:
     std::thread *rtpudp_t;
     std::thread *rtcpudp_t;
 
+    std::mutex mlock_client;
     std::list<RtspClient*> rtsp_clients;
-    std::mutex mlock_server;
 
     std::thread *remove_t;
-    std::vector<RtspClient*> remove_clients;
     std::mutex mlock_remove;
+    std::vector<RtspClient*> remove_clients;
     std::condition_variable mcond_remove;
 };
 

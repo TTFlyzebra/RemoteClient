@@ -19,7 +19,6 @@ using namespace android;
 EncoderAudio::EncoderAudio(ServerManager* manager)
 :mManager(manager)
 ,is_stop(false)
-,is_running(false)
 ,is_codec(false)
 ,out_buf((uint8_t *)av_malloc(OUT_SAMPLE_RATE))
 ,mClientNums(0)
@@ -105,8 +104,8 @@ void EncoderAudio::serverSocket()
         if(is_stop) break;
         {
             std::lock_guard<std::mutex> lock (mlock_client);
-            client_t = new std::thread(&EncoderAudio::clientSocket, this);
             thread_sockets.push_back(client_socket);
+            client_t = new std::thread(&EncoderAudio::clientSocket, this);
             client_t->detach();
         }
     }
@@ -187,7 +186,6 @@ void EncoderAudio::clientSocket()
         }
 	}
 audio_exit:
-    clientExit(socket_fd);
     close(socket_fd);
 	FLOGD("EncoderAudio clientSocket exit!");
 	return;
@@ -355,16 +353,4 @@ void EncoderAudio::encoderPCMData(sp<ABuffer> pcmdata,      int32_t sample_fmt, 
                 break;
         }
     }
-}
-
-void EncoderAudio::clientExit(int32_t socket_fd)
-{
-    int32_t size = conn_sockets.empty()?0:((int)conn_sockets.size());
-    for(int32_t i=0; i<size; i++){
-        if(conn_sockets[i].socket == socket_fd){
-            conn_sockets.erase(conn_sockets.begin()+i);
-            break;
-        }
-    }
-    FLOGD("EncoderAudio conn_sockets size=%d.", conn_sockets.empty()?0:((int)conn_sockets.size()));
 }

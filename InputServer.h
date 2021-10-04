@@ -31,12 +31,12 @@ private:
     std::thread *server_t;
     int32_t server_socket;
 
+    std::mutex mlock_client;
     std::list<InputClient*> input_clients;
-    std::mutex mlock_server;
         
     std::thread *remove_t;
-    std::vector<InputClient*> remove_clients;
     std::mutex mlock_remove;
+    std::vector<InputClient*> remove_clients;
     std::condition_variable mcond_remove;
 
     std::thread *handle_t;

@@ -33,7 +33,7 @@ InputServer::~InputServer()
     close(server_socket);
     mManager->unRegisterListener(this);
     {
-        std::lock_guard<std::mutex> lock (mlock_server);
+        std::lock_guard<std::mutex> lock (mlock_client);
         for (std::list<InputClient*>::iterator it = input_clients.begin(); it != input_clients.end(); ++it) {
             delete ((InputClient*)*it);
         }
@@ -91,7 +91,7 @@ void InputServer::serverSocket()
         }
         if(is_stop) break;
 		InputClient *client = new InputClient(this, mManager, client_socket);
-        std::lock_guard<std::mutex> lock (mlock_server);
+        std::lock_guard<std::mutex> lock (mlock_client);
         input_clients.push_back(client);
     }
     close(server_socket);
@@ -110,7 +110,7 @@ void InputServer::removeClient()
             if(is_stop) break;
             for (std::vector<InputClient*>::iterator it = remove_clients.begin(); it != remove_clients.end(); ++it) {
                 {
-                    std::lock_guard<std::mutex> lock (mlock_server);
+                    std::lock_guard<std::mutex> lock (mlock_client);
                     input_clients.remove(((InputClient*)*it));
                 }
                 delete ((InputClient*)*it);

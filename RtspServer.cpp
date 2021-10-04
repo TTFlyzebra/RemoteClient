@@ -36,7 +36,7 @@ RtspServer::~RtspServer()
     close(server_socket);
     mManager->unRegisterListener(this);
     {
-        std::lock_guard<std::mutex> lock (mlock_server);
+        std::lock_guard<std::mutex> lock (mlock_client);
         for (std::list<RtspClient*>::iterator it = rtsp_clients.begin(); it != rtsp_clients.end(); ++it) {
             delete ((RtspClient*)*it);
         }
@@ -104,7 +104,7 @@ void RtspServer::serverSocket()
         }
         if(is_stop) break;
         RtspClient *client = new RtspClient(this, mManager, client_socket);
-        std::lock_guard<std::mutex> lock (mlock_server);
+        std::lock_guard<std::mutex> lock (mlock_client);
         rtsp_clients.push_back(client);
     }
     close(server_socket);
@@ -202,7 +202,7 @@ void RtspServer::removeClient()
             if(is_stop) break;
             for (std::vector<RtspClient*>::iterator it = remove_clients.begin(); it != remove_clients.end(); ++it) {
                 {
-                    std::lock_guard<std::mutex> lock (mlock_server);
+                    std::lock_guard<std::mutex> lock (mlock_client);
                     rtsp_clients.remove(((RtspClient*)*it));
                 }
                 delete ((RtspClient*)*it);

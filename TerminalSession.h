@@ -19,23 +19,30 @@ private:
     void connThread();
     void sendThread();
     void handThread();
+    void timerThread();
+    void sendData(const char* data, int32_t size);
 
 private:
     ServerManager* mManager;
     int32_t mSocket;
-
     volatile bool is_stop;
-    volatile bool is_connect;
+    
     std::mutex mlock_conn;
+    volatile bool is_connect;
     std::condition_variable mcond_conn;
 
     std::thread *send_t;
-    std::vector<char> sendBuf;
     std::mutex mlock_send;
+    std::vector<char> sendBuf;
     std::condition_variable mcond_send;
 
     std::thread *recv_t;
     std::thread *hand_t;
+    std::mutex mlock_recv;
+    std::vector<char> recvBuf;
+    std::condition_variable mcond_recv;
+    
+    std::thread *time_t;
 };
 
 #endif //ANDROID_TERMINALSESSION_H

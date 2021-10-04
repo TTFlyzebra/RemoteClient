@@ -20,6 +20,10 @@ ServerManager::~ServerManager()
         std::lock_guard<std::mutex> lock (mlock_data);
         mcond_data.notify_all();
     }
+    {
+        std::lock_guard<std::mutex> lock (mlock_list);
+        notifyList.clear();
+    }
     data_t->join();
     delete data_t;
     FLOGD("%s()", __func__);
@@ -27,12 +31,14 @@ ServerManager::~ServerManager()
 
 void ServerManager::registerListener(INotify* notify)
 {
+    if(is_stop) return;
     std::lock_guard<std::mutex> lock (mlock_list);
     notifyList.push_back(notify);
 }
 
 void ServerManager::unRegisterListener(INotify* notify)
 {
+    if(is_stop) return;
     std::lock_guard<std::mutex> lock (mlock_list);
     notifyList.remove(notify);
 }
@@ -60,6 +66,7 @@ void ServerManager::updataAsync(const char* data, int32_t size)
 
 void ServerManager::handleData()
 {
+    
     while(!is_stop){
         {
             std::unique_lock<std::mutex> lock (mlock_data);
@@ -67,17 +74,17 @@ void ServerManager::handleData()
                 mcond_data.wait(lock);
             }
             if(is_stop) break;
-            //char temp[4096] = {0};
-            //for (int32_t i = 0; i < 8; i++) {
-            //    sprintf(temp, "%s%02x:", temp, dataBuf[i]);
-            //}
-            //FLOGE("notify:->%s", temp);
             if(((dataBuf[0]&0xFF)!=0xEE)||((dataBuf[1]&0xFF)!=0xAA)){
                 FLOGE("handleData bad header[%02x:%02x]", dataBuf[0], dataBuf[1]);
                 dataBuf.clear();
                 continue;
             }
         }
+        //char temp[64] = {0};
+        //for (int32_t i = 0; i < 16; i++) {
+        //    sprintf(temp, "%s%02x:", temp, dataBuf[i]);
+        //}
+        //FLOGE("notify:->%s", temp);
         {
             std::unique_lock<std::mutex> lock (mlock_data);
             int32_t dataLen = dataBuf[6]<<24|dataBuf[7]<<16|dataBuf[8]<<8|dataBuf[9];

@@ -44,12 +44,12 @@ private:
 private:
     volatile bool is_stop;
 
-    std::list<INotify*> notifyList;
     std::mutex mlock_list;
+    std::list<INotify*> notifyList;
 
     std::thread *data_t;
-    std::vector<char> dataBuf;
     std::mutex mlock_data;
+    std::vector<char> dataBuf;
     std::condition_variable mcond_data;
 };
 

@@ -69,16 +69,15 @@ protected:
 private:
     void serverSocket();
     void clientSocket();
+    
+    void ffmpegInit();
+    void ffmpegRelease();
 
     void codecInit();
     void codecRelease();
 
     void encoderPCMData(sp<ABuffer> pcmdata,      int32_t sample_fmt, int32_t sample_rate, int64_t ch_layout);
-    void clientExit(int32_t socket_fd);
 
-    void ffmpegInit();
-    void ffmpegRelease();
-    
 private:
     struct client_conn {
         int32_t socket;
@@ -94,22 +93,19 @@ private:
     Vector<sp<MediaCodecBuffer>> outBuffers;
     Vector<sp<MediaCodecBuffer>> inBuffers;
 
-    std::vector<int32_t> thread_sockets;
-    std::vector<client_conn> conn_sockets;
     volatile bool is_stop;
-    volatile bool is_running;
     volatile bool is_codec;
-    pthread_t init_socket_tid;
+
+    std::mutex mlock_client;
+    std::vector<int32_t> thread_sockets;
+    
     int32_t server_socket;
 
     std::map<int32_t, struct SwrContext*> swr_cxts;
     uint8_t *out_buf;
-
     
     std::thread *server_t;
-    
     std::thread *client_t;
-    std::mutex mlock_client;
 
     volatile int32_t mClientNums;
 

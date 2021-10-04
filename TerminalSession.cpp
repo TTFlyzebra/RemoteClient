@@ -22,12 +22,13 @@ TerminalSession::TerminalSession(ServerManager* manager)
     recv_t = new std::thread(&TerminalSession::connThread, this);
     send_t = new std::thread(&TerminalSession::sendThread, this);
     hand_t = new std::thread(&TerminalSession::handThread, this);
+    time_t = new std::thread(&TerminalSession::timerThread, this);
 }
 
 TerminalSession::~TerminalSession()
 {
-    mManager->unRegisterListener(this);
     is_stop = true;
+    mManager->unRegisterListener(this);
 	shutdown(mSocket, SHUT_RDWR);
     close(mSocket);
     {
@@ -38,12 +39,18 @@ TerminalSession::~TerminalSession()
         std::lock_guard<std::mutex> lock (mlock_send);
         mcond_send.notify_all();
     }
+    {
+        std::lock_guard<std::mutex> lock (mlock_recv);
+        mcond_recv.notify_all();
+    }
     recv_t->join();
     send_t->join();
     hand_t->join();
+    time_t->join();
     delete recv_t;
     delete send_t;
     delete hand_t;
+    delete time_t;
     FLOGD("%s()", __func__);
 }
 
@@ -60,7 +67,6 @@ int32_t TerminalSession::notify(const char* data, int32_t size)
 
 void TerminalSession::connThread()
 {
-    FLOGD("%s() start!", __func__);   
     char tempBuf[4096];
     while(!is_stop){
         if(!is_connect){
@@ -89,25 +95,22 @@ void TerminalSession::connThread()
             }
         }else{
             int recvLen = recv(mSocket, tempBuf, 4096, 0);
-            FLOGD("recv data size[%d], errno=%d.", recvLen, errno);
+            FLOGD("TerminalSession recv data size[%d], errno=%d.", recvLen, errno);
             if(recvLen==0 || (!(errno==11 || errno== 0))) {
                 //TODO::disconnect
                 is_connect = false;
                 continue;
             }else{
-                //std::lock_guard<std::mutex> lock (mlock_hand);
-                //recvBuf.insert(recvBuf.end(), tempBuf, tempBuf+recvLen);
-                //mcond_send.notify_one();
-                notify(tempBuf, recvLen);
+                std::lock_guard<std::mutex> lock (mlock_recv);
+                recvBuf.insert(recvBuf.end(), tempBuf, tempBuf+recvLen);
+                mcond_recv.notify_one();
             }
         }
     }
-    FLOGD("%s() exit!", __func__);
 }
 
 void TerminalSession::sendThread()
 {
-    FLOGD("%s() start!", __func__);
     while (!is_stop) {
         {
             std::unique_lock<std::mutex> lock (mlock_conn);
@@ -122,41 +125,56 @@ void TerminalSession::sendThread()
         	    mcond_send.wait(lock);
         	}
             if(is_stop) break;
-        	int32_t sendSize = 0;
-        	int32_t dataSize = sendBuf.size();
-        	while(!is_stop && sendSize<dataSize){
-        	    int32_t sendLen = send(mSocket,(const char*)&sendBuf[sendSize],dataSize-sendSize, 0);
-        	    //FLOGD("TerminalSession sendLen=%d, errno=%d.", sendLen, errno);
-        	    if (sendLen <= 0) {
-        	        if(errno != 11 || errno!= 0) {
-        	            //TODO::disconnect
+            while(!is_stop && !sendBuf.empty()){
+    	        int32_t sendLen = send(mSocket,(const char*)&sendBuf[0],sendBuf.size(), 0);
+        	    if (sendLen < 0) {
+        	        if(errno != 11 || errno != 0) {
+                        FLOGE("TerminalSession send error, len=[%d] errno[%d]!",sendLen, errno);
         	            is_connect = false;
                         sendBuf.clear();
         	            break;
         	        }
         	    }else{
-        	        sendSize+=sendLen;
+                    sendBuf.erase(sendBuf.begin(),sendBuf.begin()+sendLen);
         	    }
-        	}
-        	sendBuf.clear();
+    	    }
         }
     }
-    FLOGD("%s() exit!", __func__);
 }
 
 void TerminalSession::handThread()
 {
-    FLOGD("%s() start!", __func__);
     while(!is_stop){
-        {
-            std::lock_guard<std::mutex> lock (mlock_send);
-            sendBuf.insert(sendBuf.end(), heartbeat, heartbeat + sizeof(heartbeat));
-            mcond_send.notify_one();
+        std::unique_lock<std::mutex> lock (mlock_recv);
+        while (!is_stop && recvBuf.empty()) {
+            mcond_recv.wait(lock);
         }
+        if(is_stop) break;
+        std::fill(recvBuf.begin(), recvBuf.end(), 0);
+        recvBuf.clear();
+    }
+}
+
+void TerminalSession::sendData(const char* data, int32_t size)
+{
+    std::lock_guard<std::mutex> lock (mlock_send);
+    if (sendBuf.size() > TERMINAL_MAX_BUFFER) {
+        FLOGD("NOTE::RtspClient send buffer too max, wile clean %zu size", sendBuf.size());
+    	sendBuf.clear();
+    }
+    sendBuf.insert(sendBuf.end(), data, data + size);
+    mcond_send.notify_one();
+}
+
+void TerminalSession::timerThread()
+{
+    while(!is_stop){
+        sendData((const char*)heartbeat,sizeof(heartbeat));
         for(int i=0;i<5000;i++){
             if(is_stop) break;
             usleep(1000);
         }
     }
-    FLOGD("%s() exit!", __func__);
 }
+
+
