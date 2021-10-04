@@ -13,8 +13,6 @@
 #include "Config.h"
 #include "Command.h"
 
-using namespace android;
-
 InputClient::InputClient(InputServer* server, ServerManager* manager, int32_t socket)
 :mServer(server)
 ,mManager(manager)

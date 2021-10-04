@@ -2,13 +2,12 @@
 // Created by FlyZebra on 2021/8/9 0009.
 //
 
+#include <stdio.h>
 #include <errno.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
-
-#include <media/stagefright/foundation/ABuffer.h>
-#include <media/stagefright/foundation/ADebug.h>
+#include <unistd.h>
 
 #include "InputServer.h"
 #include "HandlerEvent.h"
@@ -16,8 +15,6 @@
 #include "input.h"
 #include "Config.h"
 #include "GlobalVariable.h"
-
-using namespace android;
 
 InputServer::InputServer(ServerManager* manager)
 :mManager(manager)

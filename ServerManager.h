@@ -4,7 +4,6 @@
 
 #ifndef ANDROID_SERVERMANAGER_H
 #define ANDROID_SERVERMANAGER_H
-#include <stdio.h>
 #include <stdint.h>
 #include <list>
 #include <vector>

@@ -5,16 +5,8 @@
 #ifndef ANDROID_RTSPSERVER_H
 #define ANDROID_RTSPSERVER_H
 
-#include <stdint.h>
-#include <vector>
-#include <mutex>
-#include <thread>
-#include <condition_variable>
-
 #include "ServerManager.h"
 #include "RtspClient.h"
-
-namespace android {
 
 class RtspServer : public INotify {
 public:
@@ -55,8 +47,6 @@ private:
     std::mutex mlock_remove;
     std::condition_variable mcond_remove;
 };
-
-}; // namespace android
 
 #endif //ANDROID_RTSPSERVER_H
 

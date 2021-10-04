@@ -5,12 +5,6 @@
 #ifndef ANDROID_TERMINALSESSION_H
 #define ANDROID_TERMINALSESSION_H
 
-#include <stdint.h>
-#include <vector>
-#include <mutex>
-#include <thread>
-#include <condition_variable>
-#include <unistd.h>
 #include "ServerManager.h"
 
 class TerminalSession : public INotify{

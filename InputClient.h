@@ -5,18 +5,9 @@
 #ifndef ANDROID_INPUTCLIENT_H
 #define ANDROID_INPUTCLIENT_H
 
-#include <stdint.h>
-#include <vector>
-#include <mutex>
-#include <thread>
-#include <condition_variable>
-#include <unistd.h>
-#include <string>
 #include <arpa/inet.h>
 #include "ServerManager.h"
 #include "FlyLog.h"
-
-namespace android {
 
 class InputServer;
 
@@ -54,9 +45,6 @@ private:
     std::condition_variable mcond_recv;
 
 };
-
-}; // namespace android
-
 
 #endif //ANDROID_INPUTCLIENT_H
 

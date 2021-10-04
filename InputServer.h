@@ -5,16 +5,8 @@
 #ifndef ANDROID_INPUTSERVER_H
 #define ANDROID_INPUTSERVER_H
 
-#include <stdint.h>
-#include <vector>
-#include <mutex>
-#include <thread>
-#include <condition_variable>
-
 #include "ServerManager.h"
 #include "InputClient.h"
-
-namespace android {
 
 class InputServer : public INotify {
 public:
@@ -49,7 +41,5 @@ private:
 
     std::thread *handle_t;
 };
-
-}; // namespace android
 
 #endif //ANDROID_INPUTSERVER_H

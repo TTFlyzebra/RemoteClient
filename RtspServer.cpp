@@ -14,8 +14,6 @@
 #include "Config.h"
 #include "Command.h"
 
-using namespace android;
-
 RtspServer::RtspServer(ServerManager* manager)
 :mManager(manager)
 ,is_stop(false)
