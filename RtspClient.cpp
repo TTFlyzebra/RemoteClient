@@ -34,8 +34,8 @@ RtspClient::RtspClient(RtspServer* server, ServerManager* manager, int32_t socke
 
 RtspClient::~RtspClient()
 {
-    mManager->unRegisterListener(this);
     is_stop = true;
+    mManager->unRegisterListener(this);
     shutdown(mSocket, SHUT_RDWR);
     close(mSocket);
     {
@@ -301,7 +301,6 @@ void RtspClient::onSetupRequest(const char* data, int32_t cseq)
     sprintf(temp, "Session: %d\r\n",mSocket);
     response.append(temp);
     response.append("\r\n");
-    conn_status = S_SETUP;
     if(conn_type==RTP_TCP){
         sendData(response.c_str(),response.size());
     }else{

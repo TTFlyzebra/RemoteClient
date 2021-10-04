@@ -23,15 +23,16 @@ LOCAL_SRC_FILES := \
     TextRenderer.cpp \
     Overlay.cpp \
     Program.cpp \
-    mobilectl.cpp \
 	TerminalSession.cpp \
     ServerManager.cpp \
     EncoderVideo.cpp \
     EncoderAudio.cpp \
     RtspServer.cpp \
     RtspClient.cpp \
+    InputServer.cpp \
+    InputClient.cpp \
     Base64.cpp \
-    Controller.cpp \
+    main.cpp \
 
 LOCAL_SHARED_LIBRARIES := \
 	libstagefright \

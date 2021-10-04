@@ -2,8 +2,8 @@
 // Created by FlyZebra on 2021/10/02 0016.
 //
 
-#ifndef ANDROID_RtspCLIENT_H
-#define ANDROID_RtspCLIENT_H
+#ifndef ANDROID_RRSPCLIENT_H
+#define ANDROID_RRSPCLIENT_H
 
 #include <stdint.h>
 #include <vector>
@@ -56,11 +56,6 @@ private:
         RTP_UDP,
     };
 
-    enum {
-        S_SETUP,
-        S_PLAY,
-    };
-        
     RtspServer* mServer;
     ServerManager* mManager;     
     int32_t mSocket;
@@ -82,7 +77,6 @@ private:
 	int32_t sequencenumber2;
 
     int32_t conn_type;
-    int32_t conn_status;
     int32_t conn_addrLen;
     int32_t conn_rtp_port;
     int32_t conn_rtcp_port;
@@ -94,5 +88,5 @@ private:
 
 }; // namespace android
 
-#endif //ANDROID_RtspCLIENT_H
+#endif //ANDROID_RRSPCLIENT_H
 

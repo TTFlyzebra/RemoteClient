@@ -93,7 +93,6 @@ void RtspServer::serverSocket()
         FLOGE( "serverSocket bind %d socket error %s errno: %d", RTSP_SERVER_TCP_PORT,strerror(errno), errno);
         return;
     }
-    
     ret = listen(server_socket, 5);
     if (ret < 0) {
         FLOGE("serverSocket listen error %s errno: %d", strerror(errno), errno);
@@ -194,13 +193,6 @@ void RtspServer::rtcpudpSocket()
     return;
 }
 
-void RtspServer::disconnectClient(RtspClient* client)
-{
-    std::lock_guard<std::mutex> lock (mlock_remove);
-    remove_clients.push_back(client);
-    mcond_remove.notify_one();
-}
-
 void RtspServer::removeClient()
 {
     while(!is_stop){
@@ -223,3 +215,9 @@ void RtspServer::removeClient()
     }
 }
 
+void RtspServer::disconnectClient(RtspClient* client)
+{
+    std::lock_guard<std::mutex> lock (mlock_remove);
+    remove_clients.push_back(client);
+    mcond_remove.notify_one();
+}
