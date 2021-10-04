@@ -30,7 +30,7 @@ private:
     bool isRunning = false;
     ServerManager* mManager;
     sp<AMessage> mNotify;
-    volatile int32_t mClientNums;
+    volatile int32_t clientNum;
 };
 
 }; // namespace android

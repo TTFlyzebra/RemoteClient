@@ -14,14 +14,16 @@ using namespace android;
 
 EncoderVideo::EncoderVideo(ServerManager* manager)
 :mManager(manager)
-,mClientNums(0)
+,clientNum(0)
 {
+    FLOGD("%s()", __func__);
     mManager->registerListener(this);
 }
 
 EncoderVideo::~EncoderVideo()
 {
     mManager->unRegisterListener(this);
+    FLOGD("%s()", __func__);
 }
 
 int32_t EncoderVideo::notify(const char* data, int32_t size)
@@ -29,14 +31,14 @@ int32_t EncoderVideo::notify(const char* data, int32_t size)
     struct NotifyData* notifyData = (struct NotifyData*)data;
     switch (notifyData->type){
     case 0x0102:
-        mClientNums++;
-        if(mClientNums<=1){
+        clientNum++;
+        if(clientNum<=1){
             startRecord();
         }
         return -1;
     case 0x0202:
-        mClientNums--;
-        if(mClientNums<=0){
+        clientNum--;
+        if(clientNum<=0){
             stopRecord();
         }
         return -1;

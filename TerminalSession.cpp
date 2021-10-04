@@ -27,10 +27,8 @@ TerminalSession::TerminalSession(ServerManager* manager)
 
 TerminalSession::~TerminalSession()
 {
-    is_stop = true;
     mManager->unRegisterListener(this);
-	shutdown(mSocket, SHUT_RDWR);
-    close(mSocket);
+    is_stop = true;
     {
         std::lock_guard<std::mutex> lock (mlock_conn);
         mcond_conn.notify_all();
@@ -43,6 +41,10 @@ TerminalSession::~TerminalSession()
         std::lock_guard<std::mutex> lock (mlock_recv);
         mcond_recv.notify_all();
     }
+
+    shutdown(mSocket, SHUT_RDWR);
+    close(mSocket);
+    
     recv_t->join();
     send_t->join();
     hand_t->join();

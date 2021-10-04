@@ -18,6 +18,7 @@ RtspServer::RtspServer(ServerManager* manager)
 :mManager(manager)
 ,is_stop(false)
 {
+    FLOGD("%s()", __func__);
     mManager->registerListener(this);
     server_t = new std::thread(&RtspServer::serverSocket, this);
     rtpudp_t = new std::thread(&RtspServer::rtpudpSocket, this);
@@ -27,14 +28,19 @@ RtspServer::RtspServer(ServerManager* manager)
 
 RtspServer::~RtspServer()
 {
+    mManager->unRegisterListener(this);
     is_stop = true;
+    {
+        std::lock_guard<std::mutex> lock (mlock_remove);
+        mcond_remove.notify_all();
+    }
+
     shutdown(rtp_socket, SHUT_RDWR);
     close(rtp_socket);
     shutdown(rtcp_socket, SHUT_RDWR);
     close(rtcp_socket);
     shutdown(server_socket, SHUT_RDWR);
     close(server_socket);
-    mManager->unRegisterListener(this);
     {
         std::lock_guard<std::mutex> lock (mlock_client);
         for (std::list<RtspClient*>::iterator it = rtsp_clients.begin(); it != rtsp_clients.end(); ++it) {
@@ -42,10 +48,7 @@ RtspServer::~RtspServer()
         }
         rtsp_clients.clear();
     }
-    {
-        std::lock_guard<std::mutex> lock (mlock_remove);
-        mcond_remove.notify_one();
-    }
+    
     server_t->join();
     rtpudp_t->join();
     rtcpudp_t->join();

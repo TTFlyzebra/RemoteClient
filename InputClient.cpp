@@ -29,10 +29,8 @@ InputClient::InputClient(InputServer* server, ServerManager* manager, int32_t so
 
 InputClient::~InputClient()
 {
-    is_stop = true;
     mManager->unRegisterListener(this);
-    shutdown(mSocket, SHUT_RDWR);
-    close(mSocket);
+    is_stop = true;
     {
         std::lock_guard<std::mutex> lock (mlock_send);
         mcond_send.notify_all();
@@ -41,6 +39,10 @@ InputClient::~InputClient()
         std::lock_guard<std::mutex> lock (mlock_recv);
         mcond_recv.notify_all();
     }
+    
+    shutdown(mSocket, SHUT_RDWR);
+    close(mSocket);
+    
     recv_t->join();
     send_t->join();
     hand_t->join();

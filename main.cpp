@@ -14,7 +14,6 @@
 #include "EncoderVideo.h"
 #include "FlyLog.h"
 
-
 using namespace android;
 
 static volatile bool isStop = false;
@@ -63,7 +62,7 @@ int32_t main(int32_t  argc,  char*  argv[])
     status_t err = configureSignals();
     if (err != NO_ERROR) FLOGD("configureSignals failed!");
 
-    androidSetThreadPriority(gettid(), -12);
+    androidSetThreadPriority(gettid(), -10);
     sp<ProcessState> proc(ProcessState::self());
     ProcessState::self()->startThreadPool();
 

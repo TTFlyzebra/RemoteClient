@@ -69,6 +69,7 @@ protected:
 private:
     void serverSocket();
     void clientSocket();
+    void serverClose();
     
     void ffmpegInit();
     void ffmpegRelease();
@@ -77,6 +78,7 @@ private:
     void codecRelease();
 
     void encoderPCMData(sp<ABuffer> pcmdata,      int32_t sample_fmt, int32_t sample_rate, int64_t ch_layout);
+    void clientExit(int32_t socket_fd);
 
 private:
     struct client_conn {
@@ -96,8 +98,11 @@ private:
     volatile bool is_stop;
     volatile bool is_codec;
 
+    std::mutex mlock_temp;
+    std::vector<int32_t> temp_clients;
+
     std::mutex mlock_client;
-    std::vector<int32_t> thread_sockets;
+    std::list<int32_t> audio_clients;
     
     int32_t server_socket;
 
@@ -106,8 +111,11 @@ private:
     
     std::thread *server_t;
     std::thread *client_t;
-
-    volatile int32_t mClientNums;
+    std::thread *close_t;
+    
+    std::mutex mlock_work;
+    volatile int32_t clientNum;
+    std::condition_variable mcond_work;
 
 };
 

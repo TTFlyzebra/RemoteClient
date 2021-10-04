@@ -20,6 +20,7 @@ InputServer::InputServer(ServerManager* manager)
 :mManager(manager)
 ,is_stop(false)
 {
+    FLOGD("%s()", __func__);
     mManager->registerListener(this);
     server_t = new std::thread(&InputServer::serverSocket, this);
     remove_t = new std::thread(&InputServer::removeClient, this);
@@ -28,10 +29,15 @@ InputServer::InputServer(ServerManager* manager)
 
 InputServer::~InputServer()
 {
+    mManager->unRegisterListener(this);
     is_stop = true;
+    {
+        std::lock_guard<std::mutex> lock (mlock_remove);
+        mcond_remove.notify_one();
+    }
+    
     shutdown(server_socket, SHUT_RDWR);
     close(server_socket);
-    mManager->unRegisterListener(this);
     {
         std::lock_guard<std::mutex> lock (mlock_client);
         for (std::list<InputClient*>::iterator it = input_clients.begin(); it != input_clients.end(); ++it) {
@@ -39,10 +45,7 @@ InputServer::~InputServer()
         }
         input_clients.clear();
     }
-    {
-        std::lock_guard<std::mutex> lock (mlock_remove);
-        mcond_remove.notify_one();
-    }
+    
     server_t->join();
     remove_t->join();
     handle_t->join();
@@ -124,6 +127,7 @@ void InputServer::removeClient()
 
 void InputServer::handleInputEvent()
 {
+    /*
     char recvBuf[1024];
     int32_t key_fd = open("/dev/input/event0",O_RDWR);
     //int32_t ts_fd = open("/dev/input/event2",O_RDWR);
@@ -172,6 +176,7 @@ void InputServer::handleInputEvent()
     }
     close(key_fd);
     //close(ts_fd);
+    */
 }
 
 
