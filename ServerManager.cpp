@@ -57,7 +57,7 @@ void ServerManager::updataAsync(const char* data, int32_t size)
 {
     std::lock_guard<std::mutex> lock (mlock_data);
     if (dataBuf.size() > TERMINAL_MAX_BUFFER) {
-        FLOGE("NOTE::ServerManager updataAsync buffer too max, will clean %zu size", dataBuf.size());
+        FLOGE("ServerManager updataAsync buffer too max, will clean %zu size", dataBuf.size());
         dataBuf.clear();
     }
     dataBuf.insert(dataBuf.end(), data, data + size);

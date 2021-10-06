@@ -63,9 +63,9 @@ int32_t TerminalSession::notify(const char* data, int32_t size)
     int32_t len = (data[6]&0xFF)<<24|(data[7]&0xFF)<<16|(data[8]&0xFF)<<8|(data[9]&0xFF);
     int32_t pts = (data[18]&0xFF)<<24|(data[19]&0xFF)<<16|(data[20]&0xFF)<<8|(data[21]&0xFF);
     switch (notifyData->type){
-    case 0x0302:
-    case 0x0402:
-    case 0x0502:
+    case 0x0302://SPSPPS:T->R
+    case 0x0402://VIDEO:T->R
+    case 0x0502://AUDIO:T->R
         sendData(data, size);
         return -1;
     }
@@ -104,14 +104,15 @@ void TerminalSession::connThread()
         }else{
             int recvLen = recv(mSocket, tempBuf, 4096, 0);
             FLOGD("TerminalSession recv data size[%d], errno=%d.", recvLen, errno);
-            if(recvLen==0 || (!(errno==11 || errno== 0))) {
-                //TODO::disconnect
-                is_connect = false;
-                continue;
-            }else{
+            if(recvLen>0){
                 std::lock_guard<std::mutex> lock (mlock_recv);
                 recvBuf.insert(recvBuf.end(), tempBuf, tempBuf+recvLen);
                 mcond_recv.notify_one();
+            }else if (recvLen <= 0) {
+                if(recvLen==0 || (!(errno==11 || errno== 0))) {
+                    is_stop = true;
+                    break;
+                }
             }
         }
     }
@@ -135,16 +136,19 @@ void TerminalSession::sendThread()
             if(is_stop) break;
             while(!is_stop && !sendBuf.empty()){
     	        int32_t sendLen = send(mSocket,(const char*)&sendBuf[0],sendBuf.size(), 0);
-        	    if (sendLen < 0) {
-        	        if(errno != 11 || errno != 0) {
-                        FLOGE("TerminalSession send error, len=[%d] errno[%d]!",sendLen, errno);
-        	            is_connect = false;
-                        sendBuf.clear();
-        	            break;
-        	        }
-        	    }else{
+        	    if(sendLen>0){
                     sendBuf.erase(sendBuf.begin(),sendBuf.begin()+sendLen);
-        	    }
+            	}else if (sendLen < 0) {
+            	    if(errno == 11) {
+                        //TODO::maybe network is slowly!
+                        FLOGE("TerminalClient->sendThread len[%d],errno[%d]",sendLen, errno);
+                        continue;
+                    } else {
+                        FLOGE("TerminalClient send error, len=[%d] errno[%d]!",sendLen, errno);
+        	            is_stop = true;
+                        break;
+        	        }
+            	}
     	    }
         }
     }
@@ -152,15 +156,30 @@ void TerminalSession::sendThread()
 
 void TerminalSession::handThread()
 {
-    while(!is_stop){
-        std::unique_lock<std::mutex> lock (mlock_recv);
-        while (!is_stop && recvBuf.empty()) {
-            mcond_recv.wait(lock);
+     while(!is_stop){
+        {
+            std::unique_lock<std::mutex> lock (mlock_recv);
+            while (!is_stop && recvBuf.size() < 20) {
+                mcond_recv.wait(lock);
+            }
+            if(is_stop) break;
+            if(((recvBuf[0]&0xFF)!=0xEE)||((recvBuf[1]&0xFF)!=0xAA)){
+                FLOGE("RemoteClient handleData bad header[%02x:%02x]", recvBuf[0]&0xFF, recvBuf[1]&0xFF);
+                recvBuf.clear();
+                continue;
+            }
         }
-        if(is_stop) break;
-        mManager->updataAsync((const char*)&recvBuf[0], recvBuf.size());
-        std::fill(recvBuf.begin(), recvBuf.end(), 0);
-        recvBuf.clear();
+        {
+            std::unique_lock<std::mutex> lock (mlock_recv);
+            int32_t dLen = (recvBuf[6]&0xFF)<<24|(recvBuf[7]&0xFF)<<16|(recvBuf[8]&0xFF)<<8|(recvBuf[9]&0xFF);
+            int32_t aLen = dLen + 10;
+            while(!is_stop && (aLen>recvBuf.size())) {
+                mcond_recv.wait(lock);
+            }
+            if(is_stop) break;
+            mManager->updataSync(&recvBuf[0], aLen);
+            recvBuf.erase(recvBuf.begin(),recvBuf.begin()+aLen);
+        }
     }
 }
 

@@ -178,7 +178,6 @@ void RtspClient::disConnect()
     if(!is_disconnect){
         is_disconnect = true;
         mServer->disconnectClient(this);
-        std::lock_guard<std::mutex> lock (mManager->mlock_up);
         mManager->updataSync((const char*)encoderstop,sizeof(encoderstop));
     }
 }
@@ -326,7 +325,6 @@ void RtspClient::onPlayRequest(const char* data, int32_t cseq)
         send(mSocket,response.c_str(),response.size(),0);
     }
     {
-        std::lock_guard<std::mutex> lock (mManager->mlock_up);
         mManager->updataSync((const char*)encoderstart, sizeof(encoderstart));
     }
 }

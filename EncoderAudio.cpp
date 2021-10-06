@@ -82,6 +82,7 @@ int32_t EncoderAudio::notify(const char* data, int32_t size)
         }
         FLOGD("EncoderAudio -- clientNum=[%d].", clientNum);
         if(clientNum<=0) {
+            clientNum = 0;
             close_t = new std::thread(&EncoderAudio::serverClose, this);
             close_t->detach();
         }
@@ -411,8 +412,7 @@ void EncoderAudio::encoderPCMData(sp<ABuffer> pcmdata,      int32_t sample_fmt, 
                     adata[19] = (ptsUsec & 0xFF0000) >> 16;
                     adata[20] = (ptsUsec & 0xFF00) >> 8;
                     adata[21] =  ptsUsec & 0xFF;
-                    std::lock_guard<std::mutex> lock (mManager->mlock_up);
-                    mManager->updataAsync(adata, sizeof(adata));
+                    mManager->updataSync(adata, sizeof(adata));
                 }
                 err = mCodec->releaseOutputBuffer(outIndex);
                 break;
