@@ -8,9 +8,10 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include "TerminalSession.h"
-#include "FlyLog.h"
 #include "Config.h"
 #include "Command.h"
+#include "FlyLog.h"
+
 
 TerminalSession::TerminalSession(ServerManager* manager)
 :mManager(manager)
@@ -59,8 +60,8 @@ TerminalSession::~TerminalSession()
 int32_t TerminalSession::notify(const char* data, int32_t size)
 {
     struct NotifyData* notifyData = (struct NotifyData*)data;
-    int32_t len = data[6]<<24|data[7]<<16|data[8]<<8|data[9];
-    int32_t pts = data[18]<<24|data[19]<<16|data[20]<<8|data[21];
+    int32_t len = (data[6]&0xFF)<<24|(data[7]&0xFF)<<16|(data[8]&0xFF)<<8|(data[9]&0xFF);
+    int32_t pts = (data[18]&0xFF)<<24|(data[19]&0xFF)<<16|(data[20]&0xFF)<<8|(data[21]&0xFF);
     switch (notifyData->type){
     case 0x0302:
     case 0x0402:
@@ -84,6 +85,7 @@ void TerminalSession::connThread()
             servaddr.sin_addr.s_addr = inet_addr("192.168.1.88");
             if (connect(mSocket, (struct sockaddr *) &servaddr, sizeof(servaddr)) != 0) {
                 FLOGD("TerminalSession connect failed! %s errno :%d", strerror(errno), errno);
+                shutdown(mSocket, SHUT_RDWR);
                 close(mSocket);
                 for(int i=0;i<3000;i++){
                     if(is_stop) break;
@@ -156,6 +158,7 @@ void TerminalSession::handThread()
             mcond_recv.wait(lock);
         }
         if(is_stop) break;
+        mManager->updataAsync((const char*)&recvBuf[0], recvBuf.size());
         std::fill(recvBuf.begin(), recvBuf.end(), 0);
         recvBuf.clear();
     }

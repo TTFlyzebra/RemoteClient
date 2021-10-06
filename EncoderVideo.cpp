@@ -106,6 +106,7 @@ void EncoderVideo::loopStart()
 
 void EncoderVideo::startRecord()
 {
+    stopRecord();
     if(isRunning) return;
     FLOGD("EncoderVideo::startRecord()");
     if(isRunning){

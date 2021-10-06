@@ -7,11 +7,13 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <string.h>
 
 #include "RtspClient.h"
 #include "RtspServer.h"
 #include "Config.h"
 #include "Command.h"
+#include "FlyLog.h"
 
 RtspClient::RtspClient(RtspServer* server, ServerManager* manager, int32_t socket)
 :mServer(server)
@@ -58,8 +60,8 @@ RtspClient::~RtspClient()
 int32_t RtspClient::notify(const char* data, int32_t size)
 {
     struct NotifyData* notifyData = (struct NotifyData*)data;
-    int32_t len = data[6]<<24|data[7]<<16|data[8]<<8|data[9];
-    int32_t pts = data[18]<<24|data[19]<<16|data[20]<<8|data[21];
+    int32_t len = (data[6]&0xFF)<<24|(data[7]&0xFF)<<16|(data[8]&0xFF)<<8|(data[9]&0xFF);
+    int32_t pts = (data[18]&0xFF)<<24|(data[19]&0xFF)<<16|(data[20]&0xFF)<<8|(data[21]&0xFF);
     switch (notifyData->type){
     case 0x0302:
         sendSPSPPS(data+22, len-12, pts);
@@ -119,6 +121,7 @@ void RtspClient::sendThread()
     disConnect();
 }
 
+//TODO::one crash (RtspClient::handleData()+320) (BuildId: cef4e20c46299a389c071f449db3c7a9)
 void RtspClient::handleData()
 {
     while(!is_stop){
@@ -176,7 +179,7 @@ void RtspClient::disConnect()
         is_disconnect = true;
         mServer->disconnectClient(this);
         std::lock_guard<std::mutex> lock (mManager->mlock_up);
-        mManager->updataAsync((const char*)encoderstop,sizeof(encoderstop));
+        mManager->updataSync((const char*)encoderstop,sizeof(encoderstop));
     }
 }
 
@@ -324,7 +327,7 @@ void RtspClient::onPlayRequest(const char* data, int32_t cseq)
     }
     {
         std::lock_guard<std::mutex> lock (mManager->mlock_up);
-        mManager->updataAsync((const char*)encoderstart, sizeof(encoderstart));
+        mManager->updataSync((const char*)encoderstart, sizeof(encoderstart));
     }
 }
 

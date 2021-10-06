@@ -7,8 +7,6 @@
 
 #include <arpa/inet.h>
 #include "ServerManager.h"
-#include "FlyLog.h"
-
 
 class RtspServer;
 
@@ -20,12 +18,12 @@ public:
 public:
     virtual int32_t notify(const char* data, int32_t size);
 
-private:
-    void disConnect();
+private:    
     void recvThread();
     void sendThread();
     void handleData();
     void sendData(const char* data, int32_t size);
+    void disConnect();
 
     void appendCommonResponse(std::string *response, int32_t cseq);
         

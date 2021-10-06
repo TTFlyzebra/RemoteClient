@@ -7,11 +7,13 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <string.h>
 
 #include "InputClient.h"
 #include "InputServer.h"
 #include "Config.h"
 #include "Command.h"
+#include "FlyLog.h"
 
 InputClient::InputClient(InputServer* server, ServerManager* manager, int32_t socket)
 :mServer(server)

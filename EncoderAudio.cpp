@@ -38,8 +38,7 @@ EncoderAudio::~EncoderAudio()
     }
 
     shutdown(server_socket, SHUT_RDWR);
-    close(server_socket);
-    
+    close(server_socket);    
     {
         std::lock_guard<std::mutex> lock (mlock_client);
         for (std::list<int32_t>::iterator it = audio_clients.begin(); it != audio_clients.end(); ++it) {
@@ -436,7 +435,7 @@ void EncoderAudio::clientExit(int32_t socket_fd)
     if(is_stop) return;
     std::lock_guard<std::mutex> lock (mlock_client);
     audio_clients.remove(socket_fd);
-    FLOGD("EncoderAudio audio_clients size=%zu.", audio_clients.size());
+    FLOGD("EncoderAudio audio client size=[%zu].", audio_clients.size());
 }
 
 
