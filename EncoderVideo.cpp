@@ -15,6 +15,7 @@ using namespace android;
 EncoderVideo::EncoderVideo(ServerManager* manager)
 :mManager(manager)
 ,clientNum(0)
+,sequencenumber(0)
 {
     FLOGD("%s()", __func__);
     mManager->registerListener(this);
@@ -30,20 +31,21 @@ int32_t EncoderVideo::notify(const char* data, int32_t size)
 {
     struct NotifyData* notifyData = (struct NotifyData*)data;
     switch (notifyData->type){
-    case 0x0102:
+    case TYPE_VIDEO_START:
         clientNum++;
         if(clientNum<=1){
             startRecord();
         }
-        return -1;
-    case 0x0202:
+        return 1;
+    case TYPE_VIDEO_STOP:
         clientNum--;
         if(clientNum<=0){
+            clientNum = 0;
             stopRecord();
         }
-        return -1;
+        return 1;
     }
-    return -1;
+    return 0;
 }
 
 void EncoderVideo::onMessageReceived(const sp<AMessage> &msg)
@@ -56,15 +58,20 @@ void EncoderVideo::onMessageReceived(const sp<AMessage> &msg)
             switch (type) {
                 case kWhatSPSPPSData:
                     {
+                        sequencenumber++;
                         sp<ABuffer> data;
                         CHECK(msg->findBuffer("data", &data));
-                        char spspps[sizeof(spsppsdata)];
-                        memcpy(spspps,spsppsdata,sizeof(spsppsdata));
-                        int32_t size = data->capacity()+12;
-                        spspps[6] = (size & 0xFF000000) >> 24;
-                        spspps[7] = (size & 0xFF0000) >> 16;
-                        spspps[8] = (size & 0xFF00) >> 8;
-                        spspps[9] =  size & 0xFF;
+                        char spspps[sizeof(SPSPPS_DATA)];
+                        memcpy(spspps,SPSPPS_DATA,sizeof(SPSPPS_DATA));
+                        int32_t size = data->capacity()+16;
+                        spspps[4] = (size & 0xFF000000) >> 24;
+                        spspps[5] = (size & 0xFF0000) >> 16;
+                        spspps[6] = (size & 0xFF00) >> 8;
+                        spspps[7] =  size & 0xFF;
+                        spspps[16] = (sequencenumber & 0xFF000000) >> 24;
+                        spspps[17] = (sequencenumber & 0xFF0000) >> 16;
+                        spspps[18] = (sequencenumber & 0xFF00) >> 8;
+                        spspps[19] =  sequencenumber & 0xFF;                       
                         std::lock_guard<std::mutex> lock (mManager->mlock_up);
                         mManager->updataAsync(spspps, sizeof(spspps));
                         mManager->updataAsync((const char *)data->data(), data->capacity());
@@ -72,21 +79,26 @@ void EncoderVideo::onMessageReceived(const sp<AMessage> &msg)
                     break;
                 case kWhatVideoFrameData:
                     {
+                        sequencenumber++;
                         sp<ABuffer> data;
                         CHECK(msg->findBuffer("data", &data));
                         int64_t ptsUsec;
                         CHECK(msg->findInt64("ptsUsec", &ptsUsec));
-                        char vdata[sizeof(videodata)];
-                        memcpy(vdata,videodata,sizeof(videodata));
-                        int32_t size = data->capacity()+12;
-                        vdata[6] = (size & 0xFF000000) >> 24;
-                        vdata[7] = (size & 0xFF0000) >> 16;
-                        vdata[8] = (size & 0xFF00) >> 8;
-                        vdata[9] =  size & 0xFF;
-                        vdata[18] = (ptsUsec & 0xFF000000) >> 24;
-                        vdata[19] = (ptsUsec & 0xFF0000) >> 16;
-                        vdata[20] = (ptsUsec & 0xFF00) >> 8;
-                        vdata[21] =  ptsUsec & 0xFF;
+                        char vdata[sizeof(VIDEO_DATA)];
+                        memcpy(vdata,VIDEO_DATA,sizeof(VIDEO_DATA));
+                        int32_t size = data->capacity()+16;
+                        vdata[4] = (size & 0xFF000000) >> 24;
+                        vdata[5] = (size & 0xFF0000) >> 16;
+                        vdata[6] = (size & 0xFF00) >> 8;
+                        vdata[7] =  size & 0xFF;
+                        vdata[16] = (sequencenumber & 0xFF000000) >> 24;
+                        vdata[17] = (sequencenumber & 0xFF0000) >> 16;
+                        vdata[18] = (sequencenumber & 0xFF00) >> 8;
+                        vdata[19] =  sequencenumber & 0xFF; 
+                        vdata[20] = (ptsUsec & 0xFF000000) >> 24;
+                        vdata[21] = (ptsUsec & 0xFF0000) >> 16;
+                        vdata[22] = (ptsUsec & 0xFF00) >> 8;
+                        vdata[23] =  ptsUsec & 0xFF;
                         std::lock_guard<std::mutex> lock (mManager->mlock_up);
                         mManager->updataAsync(vdata, sizeof(vdata));
                         mManager->updataAsync((const char *)data->data(), data->capacity());

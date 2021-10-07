@@ -47,7 +47,7 @@ void ServerManager::updataSync(const char* data, int32_t size)
 {
     std::lock_guard<std::mutex> lock (mlock_list);
     for (std::list<INotify*>::iterator it = notifyList.begin(); it != notifyList.end(); ++it) {
-        if(((INotify*)*it)->notify(data, size)==0) {
+        if(((INotify*)*it)->notify(data, size)>0) {
             break;
         }
     }
@@ -69,7 +69,7 @@ void ServerManager::handleData()
     while(!is_stop){
         {
             std::unique_lock<std::mutex> lock (mlock_data);
-            while (!is_stop && dataBuf.size() < 20) {
+            while (!is_stop && dataBuf.size() < 8) {
                 mcond_data.wait(lock);
             }
             if(is_stop) break;
@@ -86,8 +86,8 @@ void ServerManager::handleData()
         //FLOGE("notify:->%s", temp);
         {
             std::unique_lock<std::mutex> lock (mlock_data);
-            int32_t dLen = (dataBuf[6]&0xFF)<<24|(dataBuf[7]&0xFF)<<16|(dataBuf[8]&0xFF)<<8|(dataBuf[9]&0xFF);
-            int32_t aLen = dLen + 10;
+            int32_t dLen = (dataBuf[4]&0xFF)<<24|(dataBuf[5]&0xFF)<<16|(dataBuf[6]&0xFF)<<8|(dataBuf[7]&0xFF);
+            int32_t aLen = dLen + 8;
             while(!is_stop && (aLen>dataBuf.size())) {
                 mcond_data.wait(lock);
             }

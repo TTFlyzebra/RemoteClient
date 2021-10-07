@@ -116,6 +116,8 @@ private:
     std::mutex mlock_work;
     volatile int32_t clientNum;
     std::condition_variable mcond_work;
+    
+    int32_t sequencenumber;
 
 };
 

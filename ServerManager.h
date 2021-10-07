@@ -14,10 +14,9 @@
 
 struct NotifyData {
     int16_t head;
-    int16_t version;
     int16_t type;
     int32_t size;
-    char*   data;
+    void*   data;
 };
 
 class INotify{

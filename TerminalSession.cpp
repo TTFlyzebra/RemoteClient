@@ -60,16 +60,24 @@ TerminalSession::~TerminalSession()
 int32_t TerminalSession::notify(const char* data, int32_t size)
 {
     struct NotifyData* notifyData = (struct NotifyData*)data;
-    int32_t len = (data[6]&0xFF)<<24|(data[7]&0xFF)<<16|(data[8]&0xFF)<<8|(data[9]&0xFF);
-    int32_t pts = (data[18]&0xFF)<<24|(data[19]&0xFF)<<16|(data[20]&0xFF)<<8|(data[21]&0xFF);
     switch (notifyData->type){
-    case 0x0302://SPSPPS:T->R
-    case 0x0402://VIDEO:T->R
-    case 0x0502://AUDIO:T->R
+    case TYPE_VIDEO_DATA:
+    case TYPE_AUDIO_DATA:
+    case TYPE_SPSPPS_DATA:
         sendData(data, size);
-        return -1;
+        return 0;
+    default: 
+        {
+            char temp[256] = {0};
+            int num = size<24?size:24;
+            for (int32_t i = 0; i < num; i++) {
+                sprintf(temp, "%s%02x:", temp, data[i]&0xFF);
+            }
+            FLOGE("notify:->%s", temp);
+        }
+        return 0;
     }
-    return -1;
+    return 0;
 }
 
 void TerminalSession::connThread()
@@ -103,7 +111,7 @@ void TerminalSession::connThread()
             }
         }else{
             int recvLen = recv(mSocket, tempBuf, 4096, 0);
-            FLOGD("TerminalSession recv data size[%d], errno=%d.", recvLen, errno);
+            //FLOGD("TerminalSession recv data size[%d], errno=%d.", recvLen, errno);
             if(recvLen>0){
                 std::lock_guard<std::mutex> lock (mlock_recv);
                 recvBuf.insert(recvBuf.end(), tempBuf, tempBuf+recvLen);
@@ -159,7 +167,7 @@ void TerminalSession::handThread()
      while(!is_stop){
         {
             std::unique_lock<std::mutex> lock (mlock_recv);
-            while (!is_stop && recvBuf.size() < 20) {
+            while (!is_stop && recvBuf.size() < 8) {
                 mcond_recv.wait(lock);
             }
             if(is_stop) break;
@@ -171,8 +179,8 @@ void TerminalSession::handThread()
         }
         {
             std::unique_lock<std::mutex> lock (mlock_recv);
-            int32_t dLen = (recvBuf[6]&0xFF)<<24|(recvBuf[7]&0xFF)<<16|(recvBuf[8]&0xFF)<<8|(recvBuf[9]&0xFF);
-            int32_t aLen = dLen + 10;
+            int32_t dLen = (recvBuf[4]&0xFF)<<24|(recvBuf[5]&0xFF)<<16|(recvBuf[6]&0xFF)<<8|(recvBuf[7]&0xFF);
+            int32_t aLen = dLen + 8;
             while(!is_stop && (aLen>recvBuf.size())) {
                 mcond_recv.wait(lock);
             }
@@ -197,10 +205,10 @@ void TerminalSession::sendData(const char* data, int32_t size)
 void TerminalSession::timerThread()
 {
     while(!is_stop){
-        sendData((const char*)heartbeat,sizeof(heartbeat));
-        for(int i=0;i<5000;i++){
+        sendData((const char*)HEARTBEAT_T,sizeof(HEARTBEAT_T));
+        for(int i=0;i<50;i++){
             if(is_stop) break;
-            usleep(1000);
+            usleep(100000);
         }
     }
 }

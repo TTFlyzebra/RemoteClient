@@ -57,9 +57,7 @@ InputServer::~InputServer()
 
 int32_t InputServer::notify(const char* data, int32_t size)
 {
-    //struct NotifyData* notifyData = (struct NotifyData*)data;
-    //int32_t len = data[6]<<24|data[7]<<16|data[8]<<8|data[9];
-    return -1;
+    return 0;
 }
 
 void InputServer::serverSocket()

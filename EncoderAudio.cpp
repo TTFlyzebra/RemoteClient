@@ -22,6 +22,7 @@ EncoderAudio::EncoderAudio(ServerManager* manager)
 ,is_codec(false)
 ,out_buf((uint8_t *)av_malloc(OUT_SAMPLE_RATE))
 ,clientNum(0)
+,sequencenumber(0)
 {
     FLOGD("%s()", __func__);
     mManager->registerListener(this);
@@ -66,15 +67,15 @@ int32_t EncoderAudio::notify(const char* data, int32_t size)
 {
     struct NotifyData* notifyData = (struct NotifyData*)data;
     switch (notifyData->type){
-    case 0x0102:
+    case TYPE_AUDIO_START:
         {
             std::lock_guard<std::mutex> lock (mlock_work);
             clientNum++;
             mcond_work.notify_one();
         }
         FLOGD("EncoderAudio ++ clientNum=[%d]", clientNum);
-        return -1;
-    case 0x0202:
+        return 1;
+    case TYPE_AUDIO_STOP:
         {
             std::lock_guard<std::mutex> lock (mlock_work);
             clientNum--;
@@ -86,9 +87,9 @@ int32_t EncoderAudio::notify(const char* data, int32_t size)
             close_t = new std::thread(&EncoderAudio::serverClose, this);
             close_t->detach();
         }
-        return -1;
+        return 1;
     }
-    return -1;
+    return 0;
 }
 
 void EncoderAudio::onMessageReceived(const sp<AMessage> &msg)
@@ -398,20 +399,25 @@ void EncoderAudio::encoderPCMData(sp<ABuffer> pcmdata,      int32_t sample_fmt, 
         switch (err) {
             case OK:
                 if (size != 0) {
-                    int32_t dataLen = outBuffers[outIndex]->size() + sizeof(audiodata);
+                    sequencenumber++;
+                    int32_t dataLen = outBuffers[outIndex]->size() + sizeof(AUDIO_DATA);
                     char adata[dataLen];
-                    memcpy(adata, audiodata, sizeof(audiodata));
-                    memcpy(adata+sizeof(audiodata), outBuffers[outIndex]->data(), outBuffers[outIndex]->size());
-                    int32_t size = outBuffers[outIndex]->size() + 12;
+                    memcpy(adata, AUDIO_DATA, sizeof(AUDIO_DATA));
+                    memcpy(adata+sizeof(AUDIO_DATA), outBuffers[outIndex]->data(), outBuffers[outIndex]->size());
+                    int32_t size = outBuffers[outIndex]->size() + 16;
                     int32_t ptsUsec = systemTime(SYSTEM_TIME_MONOTONIC) / 1000000;
-                    adata[6] = (size & 0xFF000000) >> 24;
-                    adata[7] = (size & 0xFF0000) >> 16;
-                    adata[8] = (size & 0xFF00) >> 8;
-                    adata[9] =  size & 0xFF;
-                    adata[18] = (ptsUsec & 0xFF000000) >> 24;
-                    adata[19] = (ptsUsec & 0xFF0000) >> 16;
-                    adata[20] = (ptsUsec & 0xFF00) >> 8;
-                    adata[21] =  ptsUsec & 0xFF;
+                    adata[4] = (size & 0xFF000000) >> 24;
+                    adata[5] = (size & 0xFF0000) >> 16;
+                    adata[6] = (size & 0xFF00) >> 8;
+                    adata[7] =  size & 0xFF;
+                    adata[16] = (sequencenumber & 0xFF000000) >> 24;
+                    adata[17] = (sequencenumber & 0xFF0000) >> 16;
+                    adata[18] = (sequencenumber & 0xFF00) >> 8;
+                    adata[19] =  sequencenumber & 0xFF;
+                    adata[20] = (ptsUsec & 0xFF000000) >> 24;
+                    adata[21] = (ptsUsec & 0xFF0000) >> 16;
+                    adata[22] = (ptsUsec & 0xFF00) >> 8;
+                    adata[23] =  ptsUsec & 0xFF;
                     std::lock_guard<std::mutex> lock (mManager->mlock_up);
                     mManager->updataAsync(adata, sizeof(adata));
                 }

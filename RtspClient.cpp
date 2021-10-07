@@ -59,21 +59,21 @@ RtspClient::~RtspClient()
 
 int32_t RtspClient::notify(const char* data, int32_t size)
 {
-    struct NotifyData* notifyData = (struct NotifyData*)data;
-    int32_t len = (data[6]&0xFF)<<24|(data[7]&0xFF)<<16|(data[8]&0xFF)<<8|(data[9]&0xFF);
-    int32_t pts = (data[18]&0xFF)<<24|(data[19]&0xFF)<<16|(data[20]&0xFF)<<8|(data[21]&0xFF);
+    struct NotifyData* notifyData = (struct NotifyData*)data;    
+	//int32_t len = (data[4] & 0xFF) << 24 | (data[5] & 0xFF) << 16 | (data[6] & 0xFF) << 8 | (data[7] & 0xFF);
+    int32_t pts = (data[20] & 0xFF) << 24 | (data[21] & 0xFF) << 16 | (data[22] & 0xFF) << 8 | (data[23] & 0xFF);
     switch (notifyData->type){
-    case 0x0302:
-        sendSPSPPS(data+22, len-12, pts);
-        return -1;
-    case 0x0402:
-        sendVFrame(data+22, len-12, pts);
-        return -1;
-    case 0x0502:
-        sendAFrame(data+22, len-12, pts);
-        return -1;
+    case TYPE_SPSPPS_DATA:
+        sendSPSPPS(data+24, size-24, pts);
+        return 0;
+    case TYPE_VIDEO_DATA:
+        sendVFrame(data+24, size-24, pts);
+        return 0;
+    case TYPE_AUDIO_DATA:
+        sendAFrame(data+24, size-24, pts);
+        return 0;
     }
-    return -1;
+    return 0;
 }
 
 void RtspClient::recvThread()
@@ -178,7 +178,8 @@ void RtspClient::disConnect()
     if(!is_disconnect){
         is_disconnect = true;
         mServer->disconnectClient(this);
-        mManager->updataSync((const char*)encoderstop,sizeof(encoderstop));
+        mManager->updataSync((const char*)VIDEO_STOP,sizeof(VIDEO_STOP));
+        mManager->updataSync((const char*)AUDIO_STOP,sizeof(AUDIO_STOP));
     }
 }
 
@@ -325,7 +326,8 @@ void RtspClient::onPlayRequest(const char* data, int32_t cseq)
         send(mSocket,response.c_str(),response.size(),0);
     }
     {
-        mManager->updataSync((const char*)encoderstart, sizeof(encoderstart));
+        mManager->updataSync((const char*)VIDEO_START, sizeof(VIDEO_START));
+        mManager->updataSync((const char*)AUDIO_START, sizeof(AUDIO_START));
     }
 }
 

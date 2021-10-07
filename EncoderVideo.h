@@ -31,6 +31,8 @@ private:
     ServerManager* mManager;
     sp<AMessage> mNotify;
     volatile int32_t clientNum;
+
+    int32_t sequencenumber;
 };
 
 }; // namespace android

@@ -56,7 +56,7 @@ InputClient::~InputClient()
 
 int32_t InputClient::notify(const char* data, int32_t size)
 {
-    return -1;
+    return 0;
 }
 
 void InputClient::recvThread()

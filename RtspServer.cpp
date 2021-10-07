@@ -64,15 +64,13 @@ RtspServer::~RtspServer()
 int32_t RtspServer::notify(const char* data, int32_t size)
 {
     struct NotifyData* notifyData = (struct NotifyData*)data;
-    int32_t len = data[6]<<24|data[7]<<16|data[8]<<8|data[9];
-    int32_t pts = data[18]<<24|data[19]<<16|data[20]<<8|data[21];
     switch (notifyData->type){
-    case 0x0302:
+    case TYPE_SPSPPS_DATA:
         sps_pps.clear();
-        sps_pps.insert(sps_pps.end(), data+22, data+(size-22));
-        return -1;
+        sps_pps.insert(sps_pps.end(), data+24, data+(size-24));
+        return 0;
     }
-    return -1;
+    return 0;
 }
 
 void RtspServer::serverSocket()
