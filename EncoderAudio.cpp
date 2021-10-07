@@ -412,7 +412,8 @@ void EncoderAudio::encoderPCMData(sp<ABuffer> pcmdata,      int32_t sample_fmt, 
                     adata[19] = (ptsUsec & 0xFF0000) >> 16;
                     adata[20] = (ptsUsec & 0xFF00) >> 8;
                     adata[21] =  ptsUsec & 0xFF;
-                    mManager->updataSync(adata, sizeof(adata));
+                    std::lock_guard<std::mutex> lock (mManager->mlock_up);
+                    mManager->updataAsync(adata, sizeof(adata));
                 }
                 err = mCodec->releaseOutputBuffer(outIndex);
                 break;
