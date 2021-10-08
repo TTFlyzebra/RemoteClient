@@ -9,10 +9,11 @@
 #include <cutils/properties.h>
 
 #include "EncoderAudio.h"
-#include "FlyLog.h"
 #include "HandlerEvent.h"
 #include "Command.h"
 #include "Config.h"
+#include "Global.h"
+#include "FlyLog.h"
 
 using namespace android;
 
@@ -21,12 +22,12 @@ EncoderAudio::EncoderAudio(ServerManager* manager)
 ,is_stop(false)
 ,is_codec(false)
 ,out_buf((uint8_t *)av_malloc(OUT_SAMPLE_RATE))
-,clientNum(0)
 ,sequencenumber(0)
 {
     FLOGD("%s()", __func__);
     mManager->registerListener(this);
     server_t = new std::thread(&EncoderAudio::serverSocket, this);
+    check_t = new std::thread(&EncoderAudio::clientChecked, this);
 }
 
 EncoderAudio::~EncoderAudio()
@@ -59,7 +60,9 @@ EncoderAudio::~EncoderAudio()
 
     codecRelease();    
     server_t->join();
+    check_t->join();
     delete server_t;
+    delete check_t;
     FLOGD("%s()", __func__);
 }
 
@@ -68,24 +71,23 @@ int32_t EncoderAudio::notify(const char* data, int32_t size)
     struct NotifyData* notifyData = (struct NotifyData*)data;
     switch (notifyData->type){
     case TYPE_AUDIO_START:
+    case TYPE_HEARTBEAT_AUDIO:
         {
+            lastHeartBeat = systemTime(CLOCK_MONOTONIC);
             std::lock_guard<std::mutex> lock (mlock_work);
-            clientNum++;
-            mcond_work.notify_one();
+            std::map<int64_t, int64_t>::iterator it = mTerminals.find((int64_t)notifyData->data);
+            if(it != mTerminals.end()){
+                it->second = lastHeartBeat;
+            }else{
+                mTerminals.emplace((int64_t)notifyData->data,lastHeartBeat);
+                mcond_work.notify_one();
+            }
         }
-        FLOGD("EncoderAudio ++ clientNum=[%d]", clientNum);
         return 1;
     case TYPE_AUDIO_STOP:
         {
             std::lock_guard<std::mutex> lock (mlock_work);
-            clientNum--;
-            mcond_work.notify_one();
-        }
-        FLOGD("EncoderAudio -- clientNum=[%d].", clientNum);
-        if(clientNum<=0) {
-            clientNum = 0;
-            close_t = new std::thread(&EncoderAudio::serverClose, this);
-            close_t->detach();
+            mTerminals.erase((int64_t)notifyData->data);
         }
         return 1;
     }
@@ -103,7 +105,7 @@ void EncoderAudio::serverSocket()
     while(!is_stop) {
         {
             std::unique_lock<std::mutex> lock (mlock_work);
-    	    while(!is_stop &&(clientNum<1)) {
+    	    while(!is_stop && mTerminals.empty()) {
     	        mcond_work.wait(lock);
     	    }
         }
@@ -144,14 +146,14 @@ void EncoderAudio::serverSocket()
             FLOGE("EncoderAudio listen error %s errno: %d", strerror(errno), errno);
             continue;;
         }
-        while(!is_stop && clientNum>0){
+        while(!is_stop && !mTerminals.empty()){
             int32_t client_socket = accept(server_socket, (struct sockaddr*)NULL, NULL);
             if(client_socket < 0) {
                 FLOGE("EncoderAudio accpet socket error: %s errno :%d", strerror(errno), errno);
                 continue;
             }
             if(is_stop) return;
-            if(clientNum<=0) break;
+            if(mTerminals.empty()) break;
             {
                 std::lock_guard<std::mutex> lock (mlock_temp);
                 temp_clients.push_back(client_socket);
@@ -247,20 +249,40 @@ EXIT:
 	return;
 }
 
-void EncoderAudio::serverClose()
+void EncoderAudio::clientChecked()
 {
-    shutdown(server_socket, SHUT_RDWR);
-    close(server_socket);
-    {
-        std::lock_guard<std::mutex> lock (mlock_client);
-        for (std::list<int32_t>::iterator it = audio_clients.begin(); it != audio_clients.end(); ++it) {
-            int32_t client_socket = (int32_t)*it;
-            shutdown(client_socket, SHUT_RDWR);
-            close(client_socket);
+    while(!is_stop){
+        for(int i=0;i<50;i++){
+            usleep(100000);
+            if(is_stop) return;
         }
-        audio_clients.clear();
+        {
+            std::lock_guard<std::mutex> lock (mlock_work);
+            std::map<int64_t, int64_t>::iterator it = mTerminals.begin();
+            while(it != mTerminals.end()){
+                int32_t lastTime = ((systemTime(SYSTEM_TIME_MONOTONIC) - it->second)/1000000)&0xFFFFFFFF;
+                if(lastTime > 60000){
+                    it = mTerminals.erase(it);
+                }else{
+                    it++;
+                }
+            }
+        }
+        if(mTerminals.empty()){
+            shutdown(server_socket, SHUT_RDWR);
+            close(server_socket);
+            {
+                std::lock_guard<std::mutex> lock (mlock_client);
+                for (std::list<int32_t>::iterator it = audio_clients.begin(); it != audio_clients.end(); ++it) {
+                    int32_t client_socket = (int32_t)*it;
+                    shutdown(client_socket, SHUT_RDWR);
+                    close(client_socket);
+                }
+                audio_clients.clear();
+            }
+            codecRelease();
+        }
     }
-    codecRelease();
     return;
 }
 
@@ -410,6 +432,7 @@ void EncoderAudio::encoderPCMData(sp<ABuffer> pcmdata,      int32_t sample_fmt, 
                     adata[5] = (size & 0xFF0000) >> 16;
                     adata[6] = (size & 0xFF00) >> 8;
                     adata[7] =  size & 0xFF;
+                    memcpy(adata+8,mTerminal.tid,8);
                     adata[16] = (sequencenumber & 0xFF000000) >> 24;
                     adata[17] = (sequencenumber & 0xFF0000) >> 16;
                     adata[18] = (sequencenumber & 0xFF00) >> 8;

@@ -7,12 +7,13 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
-#include <string.h>
+#include <string>
 
 #include "RtspClient.h"
 #include "RtspServer.h"
 #include "Config.h"
 #include "Command.h"
+#include "Global.h"
 #include "FlyLog.h"
 
 RtspClient::RtspClient(RtspServer* server, ServerManager* manager, int32_t socket)
@@ -21,6 +22,7 @@ RtspClient::RtspClient(RtspServer* server, ServerManager* manager, int32_t socke
 ,mSocket(socket)
 ,is_stop(false)
 ,is_disconnect(false)
+,is_play(false)
 ,sequencenumber1(0)
 ,sequencenumber2(0)
 ,conn_type(RTP_TCP)
@@ -89,6 +91,12 @@ void RtspClient::recvThread()
                 break;
             }
         }else{
+            if(is_play){
+                memcpy(HEARTBEAT_AUDIO+8,mTerminal.tid,8);
+                mManager->updataSync((const char*)HEARTBEAT_AUDIO, sizeof(HEARTBEAT_AUDIO));
+                memcpy(HEARTBEAT_VIDEO+8,mTerminal.tid,8);
+                mManager->updataSync((const char*)HEARTBEAT_VIDEO, sizeof(HEARTBEAT_VIDEO));
+            }
             std::lock_guard<std::mutex> lock (mlock_recv);
             recvBuf.insert(recvBuf.end(), tempBuf, tempBuf+recvLen);
             mcond_recv.notify_one();
@@ -178,7 +186,9 @@ void RtspClient::disConnect()
     if(!is_disconnect){
         is_disconnect = true;
         mServer->disconnectClient(this);
+        memcpy(VIDEO_STOP+8,mTerminal.tid,8);
         mManager->updataSync((const char*)VIDEO_STOP,sizeof(VIDEO_STOP));
+        memcpy(AUDIO_STOP+8,mTerminal.tid,8);
         mManager->updataSync((const char*)AUDIO_STOP,sizeof(AUDIO_STOP));
     }
 }
@@ -326,8 +336,11 @@ void RtspClient::onPlayRequest(const char* data, int32_t cseq)
         send(mSocket,response.c_str(),response.size(),0);
     }
     {
+        memcpy(VIDEO_START+8,mTerminal.tid,8);
         mManager->updataSync((const char*)VIDEO_START, sizeof(VIDEO_START));
+        memcpy(AUDIO_START+8,mTerminal.tid,8);
         mManager->updataSync((const char*)AUDIO_START, sizeof(AUDIO_START));
+        is_play = true;
     }
 }
 

@@ -69,7 +69,7 @@ protected:
 private:
     void serverSocket();
     void clientSocket();
-    void serverClose();
+    void clientChecked();
     
     void ffmpegInit();
     void ffmpegRelease();
@@ -77,7 +77,7 @@ private:
     void codecInit();
     void codecRelease();
 
-    void encoderPCMData(sp<ABuffer> pcmdata,      int32_t sample_fmt, int32_t sample_rate, int64_t ch_layout);
+    void encoderPCMData(sp<ABuffer> pcmdata, int32_t sample_fmt, int32_t sample_rate, int64_t ch_layout);
     void clientExit(int32_t socket_fd);
 
 private:
@@ -111,14 +111,14 @@ private:
     
     std::thread *server_t;
     std::thread *client_t;
-    std::thread *close_t;
+    std::thread *check_t;
     
     std::mutex mlock_work;
-    volatile int32_t clientNum;
+    std::map<int64_t, int64_t> mTerminals;
     std::condition_variable mcond_work;
+    int64_t lastHeartBeat;
     
     int32_t sequencenumber;
-
 };
 
 }; // namespace android

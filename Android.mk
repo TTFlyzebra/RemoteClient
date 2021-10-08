@@ -32,6 +32,7 @@ LOCAL_SRC_FILES := \
     InputServer.cpp \
     InputClient.cpp \
     Base64.cpp \
+    Global.cpp \
     main.cpp \
 
 LOCAL_SHARED_LIBRARIES := \

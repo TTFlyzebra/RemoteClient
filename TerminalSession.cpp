@@ -10,6 +10,7 @@
 #include "TerminalSession.h"
 #include "Config.h"
 #include "Command.h"
+#include "Global.h"
 #include "FlyLog.h"
 
 
@@ -67,14 +68,14 @@ int32_t TerminalSession::notify(const char* data, int32_t size)
         sendData(data, size);
         return 0;
     default: 
-        {
-            char temp[256] = {0};
-            int num = size<24?size:24;
-            for (int32_t i = 0; i < num; i++) {
-                sprintf(temp, "%s%02x:", temp, data[i]&0xFF);
-            }
-            FLOGE("notify:->%s", temp);
-        }
+        //{
+        //    char temp[256] = {0};
+        //    int num = size<24?size:24;
+        //    for (int32_t i = 0; i < num; i++) {
+        //        sprintf(temp, "%s%02x:", temp, data[i]&0xFF);
+        //    }
+        //    FLOGE("notify:->%s", temp);
+        //}
         return 0;
     }
     return 0;
@@ -90,7 +91,7 @@ void TerminalSession::connThread()
             memset(&servaddr, 0, sizeof(servaddr));
             servaddr.sin_family = AF_INET;
             servaddr.sin_port = htons(TERMINAL_SERVER_TCP_PORT);
-            servaddr.sin_addr.s_addr = inet_addr("192.168.1.88");
+            servaddr.sin_addr.s_addr = inet_addr(REMOTEPC_SERVER_IP);
             if (connect(mSocket, (struct sockaddr *) &servaddr, sizeof(servaddr)) != 0) {
                 FLOGD("TerminalSession connect failed! %s errno :%d", strerror(errno), errno);
                 shutdown(mSocket, SHUT_RDWR);
@@ -181,7 +182,7 @@ void TerminalSession::handThread()
             std::unique_lock<std::mutex> lock (mlock_recv);
             int32_t dLen = (recvBuf[4]&0xFF)<<24|(recvBuf[5]&0xFF)<<16|(recvBuf[6]&0xFF)<<8|(recvBuf[7]&0xFF);
             int32_t aLen = dLen + 8;
-            while(!is_stop && (aLen>recvBuf.size())) {
+            while(!is_stop && (aLen>(int32_t)recvBuf.size())) {
                 mcond_recv.wait(lock);
             }
             if(is_stop) break;
@@ -205,6 +206,7 @@ void TerminalSession::sendData(const char* data, int32_t size)
 void TerminalSession::timerThread()
 {
     while(!is_stop){
+        memcpy(HEARTBEAT_T+8,mTerminal.tid,8);
         sendData((const char*)HEARTBEAT_T,sizeof(HEARTBEAT_T));
         for(int i=0;i<50;i++){
             if(is_stop) break;
