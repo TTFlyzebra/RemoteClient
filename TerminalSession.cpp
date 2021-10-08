@@ -90,7 +90,7 @@ void TerminalSession::connThread()
             memset(&servaddr, 0, sizeof(servaddr));
             servaddr.sin_family = AF_INET;
             servaddr.sin_port = htons(TERMINAL_SERVER_TCP_PORT);
-            servaddr.sin_addr.s_addr = inet_addr("192.168.1.88");
+            servaddr.sin_addr.s_addr = inet_addr(REMOTE_SERVER_IP);
             if (connect(mSocket, (struct sockaddr *) &servaddr, sizeof(servaddr)) != 0) {
                 FLOGD("TerminalSession connect failed! %s errno :%d", strerror(errno), errno);
                 shutdown(mSocket, SHUT_RDWR);

@@ -47,6 +47,7 @@ extern "C"{
 
 #include <system/audio.h>
 #include "ServerManager.h"
+#include <set>
 
 #define SERVER_IP                    "127.0.0.1"
 #define SERVER_PORT                  "18183"
@@ -54,6 +55,10 @@ extern "C"{
 #define PROP_PROT                    "persist.sys.audio.serverport"
 
 namespace android {
+
+struct Terminal{
+	char tid[8];
+};
 
 class EncoderAudio : public AHandler, public INotify {
 public:
@@ -77,7 +82,7 @@ private:
     void codecInit();
     void codecRelease();
 
-    void encoderPCMData(sp<ABuffer> pcmdata,      int32_t sample_fmt, int32_t sample_rate, int64_t ch_layout);
+    void encoderPCMData(sp<ABuffer> pcmdata, int32_t sample_fmt, int32_t sample_rate, int64_t ch_layout);
     void clientExit(int32_t socket_fd);
 
 private:
@@ -115,6 +120,7 @@ private:
     
     std::mutex mlock_work;
     volatile int32_t clientNum;
+    std::set<Terminal> mTerminals;
     std::condition_variable mcond_work;
     
     int32_t sequencenumber;
