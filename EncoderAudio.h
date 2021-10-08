@@ -47,7 +47,6 @@ extern "C"{
 
 #include <system/audio.h>
 #include "ServerManager.h"
-#include <set>
 
 #define SERVER_IP                    "127.0.0.1"
 #define SERVER_PORT                  "18183"
@@ -55,10 +54,6 @@ extern "C"{
 #define PROP_PROT                    "persist.sys.audio.serverport"
 
 namespace android {
-
-struct Terminal{
-	char tid[8];
-};
 
 class EncoderAudio : public AHandler, public INotify {
 public:
@@ -74,7 +69,7 @@ protected:
 private:
     void serverSocket();
     void clientSocket();
-    void serverClose();
+    void clientChecked();
     
     void ffmpegInit();
     void ffmpegRelease();
@@ -116,15 +111,14 @@ private:
     
     std::thread *server_t;
     std::thread *client_t;
-    std::thread *close_t;
+    std::thread *check_t;
     
     std::mutex mlock_work;
-    volatile int32_t clientNum;
-    std::set<Terminal> mTerminals;
+    std::map<int64_t, int64_t> mTerminals;
     std::condition_variable mcond_work;
+    int64_t lastHeartBeat;
     
     int32_t sequencenumber;
-
 };
 
 }; // namespace android

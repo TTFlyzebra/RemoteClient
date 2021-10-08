@@ -14,7 +14,7 @@
 #include "FlyLog.h"
 #include "input.h"
 #include "Config.h"
-#include "GlobalVariable.h"
+#include "Global.h"
 
 InputServer::InputServer(ServerManager* manager)
 :mManager(manager)

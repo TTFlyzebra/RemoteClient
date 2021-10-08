@@ -50,6 +50,7 @@ private:
     int32_t mSocket;
     volatile bool is_stop;
     volatile bool is_disconnect;
+    volatile bool is_play;
     
     std::thread *send_t;
     std::mutex mlock_send;

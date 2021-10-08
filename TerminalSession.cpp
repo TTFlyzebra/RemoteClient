@@ -10,6 +10,7 @@
 #include "TerminalSession.h"
 #include "Config.h"
 #include "Command.h"
+#include "Global.h"
 #include "FlyLog.h"
 
 
@@ -67,14 +68,14 @@ int32_t TerminalSession::notify(const char* data, int32_t size)
         sendData(data, size);
         return 0;
     default: 
-        {
-            char temp[256] = {0};
-            int num = size<24?size:24;
-            for (int32_t i = 0; i < num; i++) {
-                sprintf(temp, "%s%02x:", temp, data[i]&0xFF);
-            }
-            FLOGE("notify:->%s", temp);
-        }
+        //{
+        //    char temp[256] = {0};
+        //    int num = size<24?size:24;
+        //    for (int32_t i = 0; i < num; i++) {
+        //        sprintf(temp, "%s%02x:", temp, data[i]&0xFF);
+        //    }
+        //    FLOGE("notify:->%s", temp);
+        //}
         return 0;
     }
     return 0;
@@ -205,6 +206,7 @@ void TerminalSession::sendData(const char* data, int32_t size)
 void TerminalSession::timerThread()
 {
     while(!is_stop){
+        memcpy(HEARTBEAT_T+8,mTerminal.tid,8);
         sendData((const char*)HEARTBEAT_T,sizeof(HEARTBEAT_T));
         for(int i=0;i<50;i++){
             if(is_stop) break;

@@ -8,6 +8,7 @@
 #include <media/stagefright/foundation/AMessage.h>
 #include <media/stagefright/foundation/AHandler.h>
 #include "ServerManager.h"
+#include <map>
 
 namespace android {
 
@@ -15,9 +16,8 @@ class EncoderVideo : public AHandler, public INotify {
 public:
     EncoderVideo(ServerManager* manager);
     ~EncoderVideo();
-    void startRecord();
-    void stopRecord();
     void loopStart();
+    void clientChecked();
     
 public:
     virtual int32_t notify(const char* data, int32_t size);
@@ -26,13 +26,18 @@ protected:
     virtual void onMessageReceived(const sp<AMessage> &msg);
 
 private:
-	static void *_run_record(void *arg);
-    bool isRunning = false;
     ServerManager* mManager;
-    sp<AMessage> mNotify;
-    volatile int32_t clientNum;
+    bool is_stop;
 
     int32_t sequencenumber;
+
+    std::mutex mlock_work;
+    std::map<int64_t, int64_t> mTerminals;
+    std::condition_variable mcond_work;
+    int64_t lastHeartBeat;
+
+    std::thread *loop_t;
+    std::thread *check_t;
 };
 
 }; // namespace android

@@ -57,13 +57,13 @@
 #include "Overlay.h"
 #include "FrameOutput.h"
 #include "HandlerEvent.h"
-#include "GlobalVariable.h"
+#include "Global.h"
 
 using namespace android;
 
 static const uint32_t kMinBitRate = 100000;         // 0.1Mbps
-static const uint32_t kMaxBitRate = 8000000;  // 200Mbps
-static const uint32_t kMaxTimeLimitSec = 180;       // 3 minutes
+static const uint32_t kMaxBitRate = 8000000;        // 200Mbps
+static const uint32_t kMaxTimeLimitSec = 60;        // 1 minutes
 static const uint32_t kFallbackWidth = 1280;        // 720p
 static const uint32_t kFallbackHeight = 720;
 static const char* kMimeTypeAvc = "video/avc";
