@@ -61,14 +61,14 @@ LOCAL_C_INCLUDES := \
 	frameworks/av/media/libstagefright \
 	frameworks/av/media/libstagefright/include \
 	frameworks/native/include/media/openmax \
-	vendor/zebra/library/ffmpeg/include
+	vendor/flyzebra/lib/ffmpeg/include
 
 LOCAL_CFLAGS :=  \
     -Werror -Wall \
     -Wno-multichar \
     -Wno-unused-parameter \
     -Wno-unused-variable \
-    -Wno-unused-function
+    -Wno-unused-function \
 
 LOCAL_MODULE_TAGS := optional
 LOCAL_MODULE:= mctl

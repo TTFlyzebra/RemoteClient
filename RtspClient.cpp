@@ -7,7 +7,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
-#include <string.h>
+#include <string>
 
 #include "RtspClient.h"
 #include "RtspServer.h"

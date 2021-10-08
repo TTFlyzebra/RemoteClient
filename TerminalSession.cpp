@@ -181,7 +181,7 @@ void TerminalSession::handThread()
             std::unique_lock<std::mutex> lock (mlock_recv);
             int32_t dLen = (recvBuf[4]&0xFF)<<24|(recvBuf[5]&0xFF)<<16|(recvBuf[6]&0xFF)<<8|(recvBuf[7]&0xFF);
             int32_t aLen = dLen + 8;
-            while(!is_stop && (aLen>recvBuf.size())) {
+            while(!is_stop && (aLen>(int32_t)recvBuf.size())) {
                 mcond_recv.wait(lock);
             }
             if(is_stop) break;

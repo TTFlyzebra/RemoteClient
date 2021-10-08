@@ -22,7 +22,6 @@
 
 #include <media/stagefright/foundation/AMessage.h>
 
-
 int screenrecord_start(android::sp<android::AMessage> notify);
 int screenrecord_stop();
 

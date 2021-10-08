@@ -30,7 +30,7 @@
 #include <termios.h>
 #include <unistd.h>
 
-#define LOG_TAG "ScreenRecord"
+#define LOG_TAG "ZEBRA-RTSP"
 #define ATRACE_TAG ATRACE_TAG_GRAPHICS
 //#define LOG_NDEBUG 0
 #include <utils/Log.h>
@@ -48,10 +48,8 @@
 #include <media/stagefright/foundation/ABuffer.h>
 #include <media/stagefright/foundation/AMessage.h>
 #include <media/stagefright/MediaCodec.h>
-#include <media/stagefright/MediaCodecConstants.h>
 #include <media/stagefright/MediaErrors.h>
 #include <media/stagefright/MediaMuxer.h>
-#include <media/stagefright/PersistentSurface.h>
 #include <media/ICrypto.h>
 #include <media/MediaCodecBuffer.h>
 
@@ -59,41 +57,14 @@
 #include "Overlay.h"
 #include "FrameOutput.h"
 #include "HandlerEvent.h"
+#include "GlobalVariable.h"
 
-using android::ABuffer;
-using android::ALooper;
-using android::AMessage;
-using android::AString;
-using android::DisplayInfo;
-using android::FrameOutput;
-using android::IBinder;
-using android::IGraphicBufferProducer;
-using android::ISurfaceComposer;
-using android::MediaCodec;
-using android::MediaCodecBuffer;
-using android::MediaMuxer;
-using android::Overlay;
-using android::PersistentSurface;
-using android::ProcessState;
-using android::Rect;
-using android::String8;
-using android::SurfaceComposerClient;
-using android::Vector;
-using android::sp;
-using android::status_t;
-
-using android::DISPLAY_ORIENTATION_0;
-using android::DISPLAY_ORIENTATION_180;
-using android::DISPLAY_ORIENTATION_90;
-using android::INVALID_OPERATION;
-using android::NAME_NOT_FOUND;
-using android::NO_ERROR;
-using android::UNKNOWN_ERROR;
+using namespace android;
 
 static const uint32_t kMinBitRate = 100000;         // 0.1Mbps
-static const uint32_t kMaxBitRate = 800000;  // 200Mbps
+static const uint32_t kMaxBitRate = 8000000;  // 200Mbps
 static const uint32_t kMaxTimeLimitSec = 180;       // 3 minutes
-static const uint32_t kFallbackWidth = 1480;        // 720p
+static const uint32_t kFallbackWidth = 1280;        // 720p
 static const uint32_t kFallbackHeight = 720;
 static const char* kMimeTypeAvc = "video/avc";
 
@@ -101,19 +72,16 @@ static const char* kMimeTypeAvc = "video/avc";
 static bool gVerbose = false;           // chatty on stdout
 static bool gRotate = false;            // rotate 90 degrees
 static bool gMonotonicTime = false;     // use system monotonic time for timestamps
-static bool gPersistentSurface = false; // use persistent surface
 static enum {
-    FORMAT_MP4, FORMAT_H264, FORMAT_WEBM, FORMAT_3GPP, FORMAT_FRAMES, FORMAT_RAW_FRAMES
+    FORMAT_MP4, FORMAT_H264, FORMAT_FRAMES, FORMAT_RAW_FRAMES
 } gOutputFormat = FORMAT_MP4;           // data format for output
-static AString gCodecName = "";         // codec name override
 static bool gSizeSpecified = false;     // was size explicitly requested?
 static bool gWantInfoScreen = false;    // do we want initial info screen?
 static bool gWantFrameTime = false;     // do we want times on each frame?
 static uint32_t gVideoWidth = 720;        // default width+height
-static uint32_t gVideoHeight = 1480;
+static uint32_t gVideoHeight = 1280;
 static uint32_t gBitRate = 8000000;     // 20Mbps
 static uint32_t gTimeLimitSec = kMaxTimeLimitSec;
-static uint32_t gBframes = 0;
 
 // Set by signal handler to stop recording.
 static volatile bool gStopRequested = false;
@@ -166,8 +134,16 @@ static status_t configureSignals() {
                 strerror(errno));
         return err;
     }
-    signal(SIGPIPE, SIG_IGN);
     return NO_ERROR;
+}
+
+/*
+ * Returns "true" if the device is rotated 90 degrees.
+ */
+static bool isDeviceRotated(int orientation) {
+    is_rotate =  orientation != DISPLAY_ORIENTATION_0 &&
+            orientation != DISPLAY_ORIENTATION_180;
+    return is_rotate;
 }
 
 /*
@@ -181,46 +157,30 @@ static status_t prepareEncoder(float displayFps, sp<MediaCodec>* pCodec,
     if (gVerbose) {
         printf("Configuring recorder for %dx%d %s at %.2fMbps\n",
                 gVideoWidth, gVideoHeight, kMimeTypeAvc, gBitRate / 1000000.0);
-        fflush(stdout);
     }
 
     sp<AMessage> format = new AMessage;
-    format->setInt32(KEY_WIDTH, gVideoWidth);
-    format->setInt32(KEY_HEIGHT, gVideoHeight);
-    format->setString(KEY_MIME, kMimeTypeAvc);
-    format->setInt32(KEY_COLOR_FORMAT, OMX_COLOR_FormatAndroidOpaque);
-    format->setInt32(KEY_BIT_RATE, gBitRate);
-    format->setFloat(KEY_FRAME_RATE, displayFps);
-    format->setInt32(KEY_I_FRAME_INTERVAL, 10);
-    format->setInt32(KEY_MAX_B_FRAMES, gBframes);
-    if (gBframes > 0) {
-        format->setInt32(KEY_PROFILE, AVCProfileMain);
-        format->setInt32(KEY_LEVEL, AVCLevel41);
-    }
+    format->setInt32("width", gVideoWidth);
+    format->setInt32("height", gVideoHeight);
+    format->setString("mime", kMimeTypeAvc);
+    format->setInt32("color-format", OMX_COLOR_FormatAndroidOpaque);
+    format->setInt32("bitrate", gBitRate);
+    format->setFloat("frame-rate", 20.0f);
+    format->setFloat("max-fps-to-encoder",20.0f);
+    format->setInt32("i-frame-interval", 10);
 
-    sp<android::ALooper> looper = new android::ALooper;
+    sp<ALooper> looper = new ALooper;
     looper->setName("screenrecord_looper");
     looper->start();
     ALOGV("Creating codec");
-    sp<MediaCodec> codec;
-    if (gCodecName.empty()) {
-        codec = MediaCodec::CreateByType(looper, kMimeTypeAvc, true);
-        if (codec == NULL) {
-            fprintf(stderr, "ERROR: unable to create %s codec instance\n",
-                    kMimeTypeAvc);
-            return UNKNOWN_ERROR;
-        }
-    } else {
-        codec = MediaCodec::CreateByComponentName(looper, gCodecName);
-        if (codec == NULL) {
-            fprintf(stderr, "ERROR: unable to create %s codec instance\n",
-                    gCodecName.c_str());
-            return UNKNOWN_ERROR;
-        }
+    sp<MediaCodec> codec = MediaCodec::CreateByType(looper, kMimeTypeAvc, true);
+    if (codec == NULL) {
+        fprintf(stderr, "ERROR: unable to create %s codec instance\n",
+                kMimeTypeAvc);
+        return UNKNOWN_ERROR;
     }
 
-    err = codec->configure(format, NULL, NULL,
-            MediaCodec::CONFIGURE_FLAG_ENCODE);
+    err = codec->configure(format, NULL, NULL, MediaCodec::CONFIGURE_FLAG_ENCODE);
     if (err != NO_ERROR) {
         fprintf(stderr, "ERROR: unable to configure %s codec at %dx%d (err=%d)\n",
                 kMimeTypeAvc, gVideoWidth, gVideoHeight, err);
@@ -230,18 +190,10 @@ static status_t prepareEncoder(float displayFps, sp<MediaCodec>* pCodec,
 
     ALOGV("Creating encoder input surface");
     sp<IGraphicBufferProducer> bufferProducer;
-    if (gPersistentSurface) {
-        sp<PersistentSurface> surface = MediaCodec::CreatePersistentInputSurface();
-        bufferProducer = surface->getBufferProducer();
-        err = codec->setInputSurface(surface);
-    } else {
-        err = codec->createInputSurface(&bufferProducer);
-    }
+    err = codec->createInputSurface(&bufferProducer);
     if (err != NO_ERROR) {
         fprintf(stderr,
-            "ERROR: unable to %s encoder input surface (err=%d)\n",
-            gPersistentSurface ? "set" : "create",
-            err);
+            "ERROR: unable to create encoder input surface (err=%d)\n", err);
         codec->release();
         return err;
     }
@@ -264,17 +216,26 @@ static status_t prepareEncoder(float displayFps, sp<MediaCodec>* pCodec,
  * Sets the display projection, based on the display dimensions, video size,
  * and device orientation.
  */
-static status_t setDisplayProjection(
-        SurfaceComposerClient::Transaction& t,
-        const sp<IBinder>& dpy,
+static status_t setDisplayProjection(const sp<IBinder>& dpy,
         const DisplayInfo& mainDpyInfo) {
 
     // Set the region of the layer stack we're interested in, which in our
-    // case is "all of it".
-    Rect layerStackRect(mainDpyInfo.viewportW, mainDpyInfo.viewportH);
+    // case is "all of it".  If the app is rotated (so that the width of the
+    // app is based on the height of the display), reverse width/height.
+    bool deviceRotated = isDeviceRotated(mainDpyInfo.orientation);
+    uint32_t sourceWidth, sourceHeight;
+    if (!deviceRotated) {
+        sourceWidth = mainDpyInfo.w;
+        sourceHeight = mainDpyInfo.h;
+    } else {
+        ALOGV("using rotated width/height");
+        sourceHeight = mainDpyInfo.w;
+        sourceWidth = mainDpyInfo.h;
+    }
+    Rect layerStackRect(sourceWidth, sourceHeight);
 
     // We need to preserve the aspect ratio of the display.
-    float displayAspect = (float) mainDpyInfo.viewportH / (float) mainDpyInfo.viewportW;
+    float displayAspect = (float) sourceHeight / (float) sourceWidth;
 
 
     // Set the way we map the output onto the display surface (which will
@@ -315,17 +276,27 @@ static status_t setDisplayProjection(
         if (gRotate) {
             printf("Rotated content area is %ux%u at offset x=%d y=%d\n",
                     outHeight, outWidth, offY, offX);
-            fflush(stdout);
         } else {
             printf("Content area is %ux%u at offset x=%d y=%d\n",
                     outWidth, outHeight, offX, offY);
-            fflush(stdout);
         }
     }
-
-    t.setDisplayProjection(dpy,
-            gRotate ? DISPLAY_ORIENTATION_90 : DISPLAY_ORIENTATION_0,
-            layerStackRect, displayRect);
+    //SurfaceComposerClient::setDisplayProjection(dpy,
+    //        gRotate ? DISPLAY_ORIENTATION_90 : DISPLAY_ORIENTATION_0,
+    //        layerStackRect, displayRect);
+    if (!deviceRotated){
+        SurfaceComposerClient::setDisplayProjection(
+            dpy,
+            DISPLAY_ORIENTATION_0 ,
+            layerStackRect,
+            Rect{0,0,(int)videoWidth,(int)videoHeight});
+    }else{
+        SurfaceComposerClient::setDisplayProjection(
+            dpy,
+            DISPLAY_ORIENTATION_90 ,
+            layerStackRect,
+            Rect{0,0,(int)videoHeight,(int)videoWidth});
+    }
     return NO_ERROR;
 }
 
@@ -339,11 +310,11 @@ static status_t prepareVirtualDisplay(const DisplayInfo& mainDpyInfo,
     sp<IBinder> dpy = SurfaceComposerClient::createDisplay(
             String8("ScreenRecorder"), false /*secure*/);
 
-    SurfaceComposerClient::Transaction t;
-    t.setDisplaySurface(dpy, bufferProducer);
-    setDisplayProjection(t, dpy, mainDpyInfo);
-    t.setDisplayLayerStack(dpy, 0);    // default stack
-    t.apply();
+    SurfaceComposerClient::openGlobalTransaction();
+    SurfaceComposerClient::setDisplaySurface(dpy, bufferProducer);
+    setDisplayProjection(dpy, mainDpyInfo);
+    SurfaceComposerClient::setDisplayLayerStack(dpy, 0);    // default stack
+    SurfaceComposerClient::closeGlobalTransaction();
 
     *pDisplayHandle = dpy;
 
@@ -366,11 +337,13 @@ static status_t runEncoder(const sp<MediaCodec>& encoder,
         sp<AMessage> mNotify) {
     static int kTimeout = 250000;   // be responsive on signal
     status_t err;
-    //ssize_t trackIdx = -1;
+    ssize_t trackIdx = -1;
     uint32_t debugNumFrames = 0;
     int64_t startWhenNsec = systemTime(CLOCK_MONOTONIC);
     int64_t endWhenNsec = startWhenNsec + seconds_to_nanoseconds(gTimeLimitSec);
     DisplayInfo mainDpyInfo;
+
+    //assert((rawFp == NULL && muxer != NULL) || (rawFp != NULL && muxer == NULL));
 
     Vector<sp<MediaCodecBuffer> > buffers;
     err = encoder->getOutputBuffers(&buffers);
@@ -388,7 +361,6 @@ static status_t runEncoder(const sp<MediaCodec>& encoder,
         //if (systemTime(CLOCK_MONOTONIC) > endWhenNsec) {
         //    if (gVerbose) {
         //        printf("Time limit reached\n");
-        //        fflush(stdout);
         //    }
         //    break;
         //}
@@ -400,12 +372,14 @@ static status_t runEncoder(const sp<MediaCodec>& encoder,
         switch (err) {
         case NO_ERROR:
             // got a buffer
-            if ((flags & MediaCodec::BUFFER_FLAG_CODECCONFIG) != 0) {
-                ALOGV("Got codec config buffer (%zu bytes)", size);
-                // ignore this -- we passed the CSD into MediaMuxer when
-                // we got the format change notification
-                size = 0;
-            }
+            //if ((flags & MediaCodec::BUFFER_FLAG_CODECCONFIG) != 0) {
+            //    ALOGV("Got codec config buffer (%zu bytes)", size);
+            //    if (muxer != NULL) {
+            //      // ignore this -- we passed the CSD into MediaMuxer when
+            //      // we got the format change notification
+            //        size = 0;
+            //    }
+            //}
             if (size != 0) {
                 ALOGV("Got data in buffer %zu, size=%zu, pts=%" PRId64,
                         bufIndex, size, ptsUsec);
@@ -416,14 +390,15 @@ static status_t runEncoder(const sp<MediaCodec>& encoder,
                     //
                     // Polling for changes is inefficient and wrong, but the
                     // useful stuff is hard to get at without a Dalvik VM.
-                    err = SurfaceComposerClient::getDisplayInfo(mainDpy, &mainDpyInfo);
+                    err = SurfaceComposerClient::getDisplayInfo(mainDpy,
+                            &mainDpyInfo);
                     if (err != NO_ERROR) {
                         ALOGW("getDisplayInfo(main) failed: %d", err);
                     } else if (orientation != mainDpyInfo.orientation) {
                         ALOGD("orientation changed, now %d", mainDpyInfo.orientation);
-                        SurfaceComposerClient::Transaction t;
-                        setDisplayProjection(t, virtualDpy, mainDpyInfo);
-                        t.apply();
+                        SurfaceComposerClient::openGlobalTransaction();
+                        setDisplayProjection(virtualDpy, mainDpyInfo);
+                        SurfaceComposerClient::closeGlobalTransaction();
                         orientation = mainDpyInfo.orientation;
                     }
                 }
@@ -432,25 +407,39 @@ static status_t runEncoder(const sp<MediaCodec>& encoder,
                 // use the current time.  This isn't great -- we could get
                 // decoded data in clusters -- but we're not expecting
                 // to hit this anyway.
-                if (ptsUsec == 0) {
-                    ptsUsec = systemTime(SYSTEM_TIME_MONOTONIC) / 1000;
-                }
-
-                // The MediaMuxer docs are unclear, but it appears that we
-                // need to pass either the full set of BufferInfo flags, or
-                // (flags & BUFFER_FLAG_SYNCFRAME).
-                //
-                // If this blocks for too long we could drop frames.  We may
-                // want to queue these up and do them on a different thread.
-                ATRACE_NAME("write sample");
-                //assert(trackIdx != -1);
-                // TODO
-                //sp<ABuffer> buffer = new ABuffer(buffers[bufIndex]->data(), buffers[bufIndex]->size());
-                //err = muxer->writeSampleData(buffer, trackIdx,  ptsUsec, flags);
-                //if (err != NO_ERROR) {
-                //    fprintf(stderr, "Failed writing data to muxer (err=%d)\n", err);
-                //    return err;
+                //if (ptsUsec == 0) {
+                //    ptsUsec = systemTime(SYSTEM_TIME_MONOTONIC) / 1000;
                 //}
+
+                //if (muxer == NULL) {
+                //    fwrite(buffers[bufIndex]->data(), 1, size, rawFp);
+                //    // Flush the data immediately in case we're streaming.
+                //    // We don't want to do this if all we've written is
+                //    // the SPS/PPS data because mplayer gets confused.
+                //    if ((flags & MediaCodec::BUFFER_FLAG_CODECCONFIG) == 0) {
+                //        fflush(rawFp);
+                //    }
+                //} else {
+                //    // The MediaMuxer docs are unclear, but it appears that we
+                //    // need to pass either the full set of BufferInfo flags, or
+                //    // (flags & BUFFER_FLAG_SYNCFRAME).
+                //    //
+                //    // If this blocks for too long we could drop frames.  We may
+                //    // want to queue these up and do them on a different thread.
+                //    ATRACE_NAME("write sample");
+                //    assert(trackIdx != -1);
+                //    // TODO
+                //    sp<ABuffer> buffer = new ABuffer(
+                //            buffers[bufIndex]->data(), buffers[bufIndex]->size());
+                //    err = muxer->writeSampleData(buffer, trackIdx,
+                //            ptsUsec, flags);
+                //    if (err != NO_ERROR) {
+                //        fprintf(stderr,
+                //            "Failed writing data to muxer (err=%d)\n", err);
+                //        return err;
+                //    }
+                //}
+                ATRACE_NAME("write sample");
                 sp<ABuffer> buffer = ABuffer::CreateAsCopy(buffers[bufIndex]->data(), buffers[bufIndex]->size());
                 sp<AMessage> notify = mNotify->dup();
                 notify->setInt32("type", kWhatVideoFrameData);
@@ -461,7 +450,8 @@ static status_t runEncoder(const sp<MediaCodec>& encoder,
             }
             err = encoder->releaseOutputBuffer(bufIndex);
             if (err != NO_ERROR) {
-                fprintf(stderr, "Unable to release output buffer (err=%d)\n", err);
+                fprintf(stderr, "Unable to release output buffer (err=%d)\n",
+                        err);
                 return err;
             }
             if ((flags & MediaCodec::BUFFER_FLAG_EOS) != 0) {
@@ -473,7 +463,7 @@ static status_t runEncoder(const sp<MediaCodec>& encoder,
         case -EAGAIN:                       // INFO_TRY_AGAIN_LATER
             ALOGV("Got -EAGAIN, looping");
             break;
-        case android::INFO_FORMAT_CHANGED:    // INFO_OUTPUT_FORMAT_CHANGED
+        case INFO_FORMAT_CHANGED:           // INFO_OUTPUT_FORMAT_CHANGED
             {
                 // Format includes CSD, which we must provide to muxer.
                 ALOGV("Encoder format changed");
@@ -503,12 +493,11 @@ static status_t runEncoder(const sp<MediaCodec>& encoder,
                 notify->setInt32("sps_len", sps_len);
                 notify->setInt32("pps_len", pps_len);
                 notify->setBuffer("data", spspps_buf);
-                notify->setInt64("ptsUsec", 0);
                 notify->post();
                 free(sps_pps);
             }
             break;
-        case android::INFO_OUTPUT_BUFFERS_CHANGED:   // INFO_OUTPUT_BUFFERS_CHANGED
+        case INFO_OUTPUT_BUFFERS_CHANGED:   // INFO_OUTPUT_BUFFERS_CHANGED
             // Not expected for an encoder; handle it anyway.
             ALOGV("Encoder buffers changed");
             err = encoder->getOutputBuffers(&buffers);
@@ -533,7 +522,6 @@ static status_t runEncoder(const sp<MediaCodec>& encoder,
         printf("Encoder stopping; recorded %u frames in %" PRId64 " seconds\n",
                 debugNumFrames, nanoseconds_to_seconds(
                         systemTime(CLOCK_MONOTONIC) - startWhenNsec));
-        fflush(stdout);
     }
     return NO_ERROR;
 }
@@ -576,17 +564,13 @@ static FILE* prepareRawOutput(const char* fileName) {
     return rawFp;
 }
 
-static inline uint32_t floorToEven(uint32_t num) {
-    return num & ~1;
-}
-
 /*
  * Main "do work" start point.
  *
  * Configures codec, muxer, and virtual display, then starts moving bits
  * around.
  */
-static status_t recordScreen(sp<AMessage> notify) {
+static status_t recordScreen(sp<AMessage> mNotify) {
     status_t err;
 
     // Configure signal handler.
@@ -599,32 +583,26 @@ static status_t recordScreen(sp<AMessage> notify) {
     self->startThreadPool();
 
     // Get main display parameters.
-    const sp<IBinder> mainDpy = SurfaceComposerClient::getInternalDisplayToken();
-    if (mainDpy == nullptr) {
-        fprintf(stderr, "ERROR: no display\n");
-        return NAME_NOT_FOUND;
-    }
-
+    sp<IBinder> mainDpy = SurfaceComposerClient::getBuiltInDisplay(
+            ISurfaceComposer::eDisplayIdMain);
     DisplayInfo mainDpyInfo;
     err = SurfaceComposerClient::getDisplayInfo(mainDpy, &mainDpyInfo);
     if (err != NO_ERROR) {
         fprintf(stderr, "ERROR: unable to get display characteristics\n");
         return err;
     }
-
     if (gVerbose) {
         printf("Main display is %dx%d @%.2ffps (orientation=%u)\n",
-                mainDpyInfo.viewportW, mainDpyInfo.viewportH, mainDpyInfo.fps,
+                mainDpyInfo.w, mainDpyInfo.h, mainDpyInfo.fps,
                 mainDpyInfo.orientation);
-        fflush(stdout);
     }
 
-    // Encoder can't take odd number as config
+    bool rotated = isDeviceRotated(mainDpyInfo.orientation);
     if (gVideoWidth == 0) {
-        gVideoWidth = floorToEven(mainDpyInfo.viewportW);
+        gVideoWidth = rotated ? mainDpyInfo.h : mainDpyInfo.w;
     }
     if (gVideoHeight == 0) {
-        gVideoHeight = floorToEven(mainDpyInfo.viewportH);
+        gVideoHeight = rotated ? mainDpyInfo.w : mainDpyInfo.h;
     }
 
     // Configure and start the encoder.
@@ -632,7 +610,7 @@ static status_t recordScreen(sp<AMessage> notify) {
     sp<FrameOutput> frameOutput;
     sp<IGraphicBufferProducer> encoderInputSurface;
     if (gOutputFormat != FORMAT_FRAMES && gOutputFormat != FORMAT_RAW_FRAMES) {
-        err = prepareEncoder(mainDpyInfo.fps, &encoder, &encoderInputSurface);
+        err = prepareEncoder(24, &encoder, &encoderInputSurface);
 
         if (err != NO_ERROR && !gSizeSpecified) {
             // fallback is defined for landscape; swap if we're in portrait
@@ -645,8 +623,7 @@ static status_t recordScreen(sp<AMessage> notify) {
                         gVideoWidth, gVideoHeight, newWidth, newHeight);
                 gVideoWidth = newWidth;
                 gVideoHeight = newHeight;
-                err = prepareEncoder(mainDpyInfo.fps, &encoder,
-                        &encoderInputSurface);
+                err = prepareEncoder(24, &encoder, &encoderInputSurface);
             }
         }
         if (err != NO_ERROR) return err;
@@ -684,7 +661,6 @@ static status_t recordScreen(sp<AMessage> notify) {
         }
         if (gVerbose) {
             printf("Bugreport overlay created\n");
-            fflush(stdout);
         }
     } else {
         // Use the encoder's input surface as the virtual display surface.
@@ -699,8 +675,77 @@ static status_t recordScreen(sp<AMessage> notify) {
         return err;
     }
 
-    // Main encoder loop.
-    err = runEncoder(encoder, mainDpy, dpy, mainDpyInfo.orientation, notify);
+    /*sp<MediaMuxer> muxer = NULL;
+    FILE* rawFp = NULL;
+    switch (gOutputFormat) {
+        case FORMAT_MP4: {
+            // Configure muxer.  We have to wait for the CSD blob from the encoder
+            // before we can start it.
+            err = unlink(fileName);
+            if (err != 0 && errno != ENOENT) {
+                fprintf(stderr, "ERROR: couldn't remove existing file\n");
+                abort();
+            }
+            int fd = open(fileName, O_CREAT | O_LARGEFILE | O_TRUNC | O_RDWR, S_IRUSR | S_IWUSR);
+            if (fd < 0) {
+                fprintf(stderr, "ERROR: couldn't open file\n");
+                abort();
+            }
+            muxer = new MediaMuxer(fd, MediaMuxer::OUTPUT_FORMAT_MPEG_4);
+            close(fd);
+            if (gRotate) {
+                muxer->setOrientationHint(90);  // TODO: does this do anything?
+            }
+            break;
+        }
+        case FORMAT_H264:
+        case FORMAT_FRAMES:
+        case FORMAT_RAW_FRAMES: {
+            rawFp = prepareRawOutput(fileName);
+            if (rawFp == NULL) {
+                if (encoder != NULL) encoder->release();
+                return -1;
+            }
+            break;
+        }
+        default:
+            fprintf(stderr, "ERROR: unknown format %d\n", gOutputFormat);
+            abort();
+    }
+
+    if (gOutputFormat == FORMAT_FRAMES || gOutputFormat == FORMAT_RAW_FRAMES) {
+        // TODO: if we want to make this a proper feature, we should output
+        //       an outer header with version info.  Right now we never change
+        //       the frame size or format, so we could conceivably just send
+        //       the current frame header once and then follow it with an
+        //       unbroken stream of data.
+
+        // Make the EGL context current again.  This gets unhooked if we're
+        // using "--bugreport" mode.
+        // TODO: figure out if we can eliminate this
+        frameOutput->prepareToCopy();
+
+        while (!gStopRequested) {
+            // Poll for frames, the same way we do for MediaCodec.  We do
+            // all of the work on the main thread.
+            //
+            // Ideally we'd sleep indefinitely and wake when the
+            // stop was requested, but this will do for now.  (It almost
+            // works because wait() wakes when a signal hits, but we
+            // need to handle the edge cases.)
+            bool rawFrames = gOutputFormat == FORMAT_RAW_FRAMES;
+            err = frameOutput->copyFrame(rawFp, 250000, rawFrames);
+            if (err == ETIMEDOUT) {
+                err = NO_ERROR;
+            } else if (err != NO_ERROR) {
+                ALOGE("Got error %d from copyFrame()", err);
+                break;
+            }
+        }
+    } else {
+    */
+        // Main encoder loop.
+    err = runEncoder(encoder, mainDpy, dpy, mainDpyInfo.orientation, mNotify);
     if (err != NO_ERROR) {
         fprintf(stderr, "Encoder failed (err=%d)\n", err);
         // fall through to cleanup
@@ -708,14 +753,21 @@ static status_t recordScreen(sp<AMessage> notify) {
 
     if (gVerbose) {
         printf("Stopping encoder and muxer\n");
-        fflush(stdout);
     }
+    //}
 
     // Shut everything down, starting with the producer side.
     encoderInputSurface = NULL;
     SurfaceComposerClient::destroyDisplay(dpy);
     if (overlay != NULL) overlay->stop();
     if (encoder != NULL) encoder->stop();
+    //if (muxer != NULL) {
+    //    // If we don't stop muxer explicitly, i.e. let the destructor run,
+    //    // it may hang (b/11050628).
+    //    err = muxer->stop();
+    //} else if (rawFp != stdout) {
+    //    fclose(rawFp);
+    //}
     if (encoder != NULL) encoder->release();
 
     return err;
@@ -747,7 +799,6 @@ static status_t notifyMediaScanner(const char* fileName) {
             printf(" %s", argv[i]);
         }
         putchar('\n');
-        fflush(stdout);
     }
 
     pid_t pid = fork();
@@ -885,10 +936,7 @@ int screenrecord_main(int argc, char* const argv[]) {
         { "show-frame-time",    no_argument,        NULL, 'f' },
         { "rotate",             no_argument,        NULL, 'r' },
         { "output-format",      required_argument,  NULL, 'o' },
-        { "codec-name",         required_argument,  NULL, 'N' },
         { "monotonic-time",     no_argument,        NULL, 'm' },
-        { "persistent-surface", no_argument,        NULL, 'p' },
-        { "bframes",            required_argument,  NULL, 'B' },
         { NULL,                 0,                  NULL, 0 }
     };
 
@@ -959,10 +1007,6 @@ int screenrecord_main(int argc, char* const argv[]) {
                 gOutputFormat = FORMAT_MP4;
             } else if (strcmp(optarg, "h264") == 0) {
                 gOutputFormat = FORMAT_H264;
-            } else if (strcmp(optarg, "webm") == 0) {
-                gOutputFormat = FORMAT_WEBM;
-            } else if (strcmp(optarg, "3gpp") == 0) {
-                gOutputFormat = FORMAT_3GPP;
             } else if (strcmp(optarg, "frames") == 0) {
                 gOutputFormat = FORMAT_FRAMES;
             } else if (strcmp(optarg, "raw-frames") == 0) {
@@ -972,19 +1016,8 @@ int screenrecord_main(int argc, char* const argv[]) {
                 return 2;
             }
             break;
-        case 'N':
-            gCodecName = optarg;
-            break;
         case 'm':
             gMonotonicTime = true;
-            break;
-        case 'p':
-            gPersistentSurface = true;
-            break;
-        case 'B':
-            if (parseValueWithUnit(optarg, &gBframes) != NO_ERROR) {
-                return 2;
-            }
             break;
         default:
             if (ic != '?') {
@@ -1031,3 +1064,4 @@ int screenrecord_stop(){
     gStopRequested = true;
     return 0;
 }
+
