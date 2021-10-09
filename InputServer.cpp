@@ -89,10 +89,10 @@ void InputServer::serverSocket()
     memset(&t_sockaddr, 0, sizeof(t_sockaddr));
     t_sockaddr.sin_family = AF_INET;
     t_sockaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    t_sockaddr.sin_port = htons(CONTROLLER_TCP_PORT);
+    t_sockaddr.sin_port = htons(INPUT_SERVER_TCP_PORT);
     int32_t ret = bind(server_socket,(struct sockaddr *) &t_sockaddr,sizeof(t_sockaddr));
     if (ret < 0) {
-        FLOGE( "InputServer bind %d socket error %s errno: %d",CONTROLLER_TCP_PORT, strerror(errno), errno);
+        FLOGE( "InputServer bind %d socket error %s errno: %d",INPUT_SERVER_TCP_PORT, strerror(errno), errno);
         return;
     }
     ret = listen(server_socket, 5);

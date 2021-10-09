@@ -30,7 +30,7 @@
 #include <termios.h>
 #include <unistd.h>
 
-#define LOG_TAG "ZEBRA-RTSP"
+#define LOG_TAG "ZEBRA-MCTL"
 #define ATRACE_TAG ATRACE_TAG_GRAPHICS
 //#define LOG_NDEBUG 0
 #include <utils/Log.h>
@@ -141,9 +141,9 @@ static status_t configureSignals() {
  * Returns "true" if the device is rotated 90 degrees.
  */
 static bool isDeviceRotated(int orientation) {
-    is_rotate =  orientation != DISPLAY_ORIENTATION_0 &&
+    is_screenRotate =  orientation != DISPLAY_ORIENTATION_0 &&
             orientation != DISPLAY_ORIENTATION_180;
-    return is_rotate;
+    return is_screenRotate;
 }
 
 /*

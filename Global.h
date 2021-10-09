@@ -5,7 +5,7 @@
 #ifndef ANDROID_GLOBAL_H
 #define ANDROID_GLOBAL_H
 
-extern bool is_rotate;
+extern bool is_screenRotate;
 
 struct Terminal{
 	char tid[8];

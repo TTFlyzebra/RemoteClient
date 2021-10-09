@@ -4,7 +4,7 @@
 
 #include "Global.h"
 
-bool is_rotate  = false;
+bool is_screenRotate  = false;
 
 Terminal mTerminal;
 
