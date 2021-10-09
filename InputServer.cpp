@@ -229,11 +229,6 @@ void InputServer::inputKey(int32_t fd, int16_t key)
 
 void InputServer::inputTouch(int32_t fd, int16_t x, int16_t y, int16_t action)
 {
-    if(is_rotate){
-        int16_t t = x;
-        x = y;
-        y = t;
-    }
     input_event _event1;
     memset(&_event1,0,sizeof(_event1));
     _event1.type = EV_ABS;
