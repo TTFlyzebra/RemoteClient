@@ -62,7 +62,7 @@
 using namespace android;
 
 static const uint32_t kMinBitRate = 100000;         // 0.1Mbps
-static const uint32_t kMaxBitRate = 8000000;        // 200Mbps
+static const uint32_t kMaxBitRate = 2000000;        // 2 Mbps
 static const uint32_t kMaxTimeLimitSec = 60;        // 1 minutes
 static const uint32_t kFallbackWidth = 1280;        // 720p
 static const uint32_t kFallbackHeight = 720;
@@ -80,7 +80,7 @@ static bool gWantInfoScreen = false;    // do we want initial info screen?
 static bool gWantFrameTime = false;     // do we want times on each frame?
 static uint32_t gVideoWidth = 720;        // default width+height
 static uint32_t gVideoHeight = 1280;
-static uint32_t gBitRate = 8000000;     // 20Mbps
+static uint32_t gBitRate = 2000000;     // 2 Mbps
 static uint32_t gTimeLimitSec = kMaxTimeLimitSec;
 
 // Set by signal handler to stop recording.

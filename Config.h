@@ -6,7 +6,7 @@
 #define ANDROID_CONFIG_H
 
 #define AUDIO_MIMETYPE              "audio/mp4a-latm"
-#define OUT_SAMPLE_RATE             44100
+#define OUT_SAMPLE_RATE             16000
 #define OUT_SAMPLE_FMT              AV_SAMPLE_FMT_S16
 #define OUT_CH_LAYOUT               AV_CH_LAYOUT_STEREO
 #define RTSP_SERVER_TCP_PORT        6554

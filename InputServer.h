@@ -21,9 +21,9 @@ private:
     void serverSocket();
     void removeClient();
     void handleInputEvent();
-    void inputKey(int32_t fd, int32_t key);
-    void inputTouch(int32_t fd, int32_t x, int32_t y, int32_t action);
-    
+    void inputKey(int32_t fd, int16_t key);
+    void inputTouch(int32_t fd, int16_t x, int16_t y, int16_t action);
+
 private:
     ServerManager* mManager;
     volatile bool is_stop;
@@ -40,6 +40,9 @@ private:
     std::condition_variable mcond_remove;
 
     std::thread *handle_t;
+    std::mutex mlock_event;
+    std::vector<char> events;
+    std::condition_variable mcond_event;
 };
 
 #endif //ANDROID_INPUTSERVER_H

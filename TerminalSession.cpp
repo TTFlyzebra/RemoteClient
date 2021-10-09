@@ -206,8 +206,10 @@ void TerminalSession::sendData(const char* data, int32_t size)
 void TerminalSession::timerThread()
 {
     while(!is_stop){
-        memcpy(HEARTBEAT_T+8,mTerminal.tid,8);
-        sendData((const char*)HEARTBEAT_T,sizeof(HEARTBEAT_T));
+        char heartbeat_t[sizeof(HEARTBEAT_T)];
+        memcpy(heartbeat_t,HEARTBEAT_T,sizeof(HEARTBEAT_T));
+        memcpy(heartbeat_t+8,mTerminal.tid,8);
+        sendData((const char*)heartbeat_t,sizeof(heartbeat_t));
         for(int i=0;i<50;i++){
             if(is_stop) break;
             usleep(100000);

@@ -195,21 +195,19 @@ void RtspServer::rtcpudpSocket()
 void RtspServer::removeClient()
 {
     while(!is_stop){
-        {
-            std::unique_lock<std::mutex> lock (mlock_remove);
-            while (!is_stop && remove_clients.empty()) {
-                mcond_remove.wait(lock);
-            }
-            if(is_stop) break;
-            for (std::vector<RtspClient*>::iterator it = remove_clients.begin(); it != remove_clients.end(); ++it) {
-                {
-                    std::lock_guard<std::mutex> lock (mlock_client);
-                    rtsp_clients.remove(((RtspClient*)*it));
-                }
-                delete ((RtspClient*)*it);
-            }
-            remove_clients.clear();
+        std::unique_lock<std::mutex> lock (mlock_remove);
+        while (!is_stop && remove_clients.empty()) {
+            mcond_remove.wait(lock);
         }
+        if(is_stop) break;
+        for (std::vector<RtspClient*>::iterator it = remove_clients.begin(); it != remove_clients.end(); ++it) {
+            {
+                std::lock_guard<std::mutex> lock (mlock_client);
+                rtsp_clients.remove(((RtspClient*)*it));
+            }
+            delete ((RtspClient*)*it);
+        }
+        remove_clients.clear();
         FLOGD("RtspServer::removeClient rtsp_clients.size=%zu", rtsp_clients.size());
     }
 }

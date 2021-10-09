@@ -8,13 +8,13 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <unistd.h>
-
 #include "InputServer.h"
 #include "HandlerEvent.h"
-#include "FlyLog.h"
 #include "input.h"
 #include "Config.h"
 #include "Global.h"
+#include "Command.h"
+#include "FlyLog.h"
 
 InputServer::InputServer(ServerManager* manager)
 :mManager(manager)
@@ -34,6 +34,10 @@ InputServer::~InputServer()
     {
         std::lock_guard<std::mutex> lock (mlock_remove);
         mcond_remove.notify_one();
+    }
+    {
+        std::lock_guard<std::mutex> lock (mlock_event);
+        mcond_event.notify_one();
     }
     
     shutdown(server_socket, SHUT_RDWR);
@@ -57,6 +61,18 @@ InputServer::~InputServer()
 
 int32_t InputServer::notify(const char* data, int32_t size)
 {
+    struct NotifyData* notifyData = (struct NotifyData*)data;
+    switch (notifyData->type) {
+    case TYPE_INPUT_TOUCH:
+    case TYPE_INPUT_KEY:
+    case TYPE_INPUT_TEXT:
+        {
+            std::lock_guard<std::mutex> lock (mlock_event);
+            events.insert(events.end(), data, data+size);
+            mcond_event.notify_one();
+        }
+        return 1;
+    }
     return 0;
 }
 
@@ -103,21 +119,19 @@ void InputServer::serverSocket()
 void InputServer::removeClient()
 {
     while(!is_stop){
-        {
-            std::unique_lock<std::mutex> lock (mlock_remove);
-            while (!is_stop && remove_clients.empty()) {
-                mcond_remove.wait(lock);
-            }
-            if(is_stop) break;
-            for (std::vector<InputClient*>::iterator it = remove_clients.begin(); it != remove_clients.end(); ++it) {
-                {
-                    std::lock_guard<std::mutex> lock (mlock_client);
-                    input_clients.remove(((InputClient*)*it));
-                }
-                delete ((InputClient*)*it);
-            }
-            remove_clients.clear();
+        std::unique_lock<std::mutex> lock (mlock_remove);
+        while (!is_stop && remove_clients.empty()) {
+            mcond_remove.wait(lock);
         }
+        if(is_stop) break;
+        for (std::vector<InputClient*>::iterator it = remove_clients.begin(); it != remove_clients.end(); ++it) {
+            {
+                std::lock_guard<std::mutex> lock (mlock_client);
+                input_clients.remove(((InputClient*)*it));
+            }
+            delete ((InputClient*)*it);
+        }
+        remove_clients.clear();
         FLOGD("InputServer::removeClient input_clients.size=%zu", input_clients.size());
     }
 }
@@ -125,58 +139,58 @@ void InputServer::removeClient()
 
 void InputServer::handleInputEvent()
 {
-    /*
-    char recvBuf[1024];
     int32_t key_fd = open("/dev/input/event0",O_RDWR);
     //int32_t ts_fd = open("/dev/input/event2",O_RDWR);
     int32_t ts_fd = key_fd;
-    switch (recvBuf[0]){
-        //HOME 键
-        case 0x00:
-            system("input keyevent 3");
-            break;
-        //触摸屏幕
-        case 0x02:
+    while(!is_stop){
+        {
+            std::unique_lock<std::mutex> lock (mlock_event);
+            while (!is_stop && events.size() < 8) {
+                mcond_event.wait(lock);
+            }
+            if(is_stop) break;
+        }
+        char* data = (char*)&events[0];
+        struct NotifyData* notifyData = (struct NotifyData*)&events[0];
+        switch (notifyData->type) {
+        case TYPE_INPUT_TOUCH:
             {
-                int action = recvBuf[1];
-                int32_t x = (recvBuf[10]<<24)+ (recvBuf[11]<<16) + (recvBuf[12]<<8) + recvBuf[13];
-                int32_t y = (recvBuf[14]<<24)+ (recvBuf[15]<<16) + (recvBuf[16]<<8) + recvBuf[17];
-                int32_t w = (recvBuf[18]<<8) + recvBuf[19];
-                int32_t h = (recvBuf[20]<<8) + recvBuf[21];
-                inputTouch(ts_fd, x, y, action== 1 ? 0 : 1);
+                int16_t x = (data[18]&0xFF)<<8|(data[19]&0xFF);
+                int16_t y = (data[20]&0xFF)<<8|(data[21]&0xFF);;
+                int16_t w = (data[22]&0xFF)<<8|(data[23]&0xFF);;
+                int16_t h = (data[24]&0xFF)<<8|(data[25]&0xFF);;
+                x = (int16_t)x * 1080 / w;
+                y = (int16_t)y * 1920 / h;
+                inputTouch(ts_fd, x, y, (data[17]&0xFF)==0x02 ? 0 : 1);
             }
             break;
-        //中间滚动
-        case 0x03:
+        case TYPE_INPUT_KEY:
             {
-                 int32_t x = 0x21C;
-                 int32_t y = 0x3C0;
-                 if(recvBuf[20]==0x01){
-                     for(int i=0;i<10;i++) {
-                         inputTouch(ts_fd, x, y + i * 10, 1);
-                         usleep(1000);
-                     }
-                     inputTouch(ts_fd, x, y + 100, 1);
-                     inputTouch(ts_fd, x, y + 100, 0);
-                 }else{
-                     for(int i=0;i<10;i++) {
-                         inputTouch(ts_fd, x, y - i * 10, 1);
-                         usleep(1000);
-                     }
-                     inputTouch(ts_fd, x, y - 100, 1);
-                     inputTouch(ts_fd, x, y - 100, 0);
-                 }
+                inputKey(key_fd, (int16_t)(data[17]&0xFF));
             }
             break;
-        case 0x04:
-            inputKey(key_fd, KEY_BACK);
+        case TYPE_INPUT_TEXT:
+            {
+                std::lock_guard<std::mutex> lock (mlock_event);
+                int32_t dLen = (data[4]&0xFF)<<24|(data[5]&0xFF)<<16|(data[6]&0xFF)<<8|(data[7]&0xFF);
+                char text[dLen-8];
+                memcpy(text,data+16,dLen-8);
+                char temp[dLen+8];
+                sprintf(temp, "input text %s", text);
+                system(temp);
+            }
             break;
+        }
+        {
+            std::lock_guard<std::mutex> lock (mlock_event);
+            int32_t dLen = (data[4]&0xFF)<<24|(data[5]&0xFF)<<16|(data[6]&0xFF)<<8|(data[7]&0xFF);
+            events.erase(events.begin(),events.begin()+(dLen + 8));
+        }
+
     }
     close(key_fd);
     //close(ts_fd);
-    */
 }
-
 
 void InputServer::disconnectClient(InputClient* client)
 {
@@ -185,7 +199,7 @@ void InputServer::disconnectClient(InputClient* client)
     mcond_remove.notify_one();
 }
 
-void InputServer::inputKey(int32_t fd, int32_t key)
+void InputServer::inputKey(int32_t fd, int16_t key)
 {
     input_event _event1;
     memset(&_event1,0,sizeof(_event1));
@@ -213,10 +227,10 @@ void InputServer::inputKey(int32_t fd, int32_t key)
     ret = write(fd,&_event4,sizeof(_event4));
 }
 
-void InputServer::inputTouch(int32_t fd, int32_t x, int32_t y, int32_t action)
+void InputServer::inputTouch(int32_t fd, int16_t x, int16_t y, int16_t action)
 {
     if(is_rotate){
-        int32_t t = x;
+        int16_t t = x;
         x = y;
         y = t;
     }
