@@ -89,7 +89,7 @@ status_t FrameOutput::createInputSurface(int width, int height,
 
 status_t FrameOutput::copyFrame(FILE* fp, long timeoutUsec, bool rawFrames) {
     Mutex::Autolock _l(mMutex);
-    ALOGV("copyFrame %ld", timeoutUsec);
+    ALOGV("copyFrame %ld\n", timeoutUsec);
 
     if (!mFrameAvailable) {
         nsecs_t timeoutNsec = (nsecs_t)timeoutUsec * 1000;

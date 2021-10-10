@@ -8,7 +8,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <string>
-
+#include <sys/syscall.h>
 #include "RtspClient.h"
 #include "RtspServer.h"
 #include "Config.h"
@@ -92,10 +92,18 @@ void RtspClient::recvThread()
             }
         }else{
             if(is_play){
-                memcpy(HEARTBEAT_AUDIO+8,mTerminal.tid,8);
-                mManager->updataSync((const char*)HEARTBEAT_AUDIO, sizeof(HEARTBEAT_AUDIO));
-                memcpy(HEARTBEAT_VIDEO+8,mTerminal.tid,8);
-                mManager->updataSync((const char*)HEARTBEAT_VIDEO, sizeof(HEARTBEAT_VIDEO));
+            	int32_t pid = (int)syscall(SYS_getpid);
+            	int32_t tid = (int)syscall(SYS_gettid);
+                char heartbeat_audio[sizeof(HEARTBEAT_AUDIO)];
+                memcpy(heartbeat_audio,HEARTBEAT_AUDIO,sizeof(HEARTBEAT_AUDIO));
+                memcpy(heartbeat_audio+8,&pid,4);
+                memcpy(heartbeat_audio+12,&tid,4);
+                mManager->updataSync((const char*)heartbeat_audio, sizeof(heartbeat_audio));
+                char heartbeat_video[sizeof(HEARTBEAT_VIDEO)];
+                memcpy(heartbeat_audio,HEARTBEAT_VIDEO,sizeof(HEARTBEAT_VIDEO));
+                memcpy(heartbeat_audio+8,&pid,4);
+                memcpy(heartbeat_audio+12,&tid,4);
+                mManager->updataSync((const char*)heartbeat_video, sizeof(heartbeat_video));
             }
             std::lock_guard<std::mutex> lock (mlock_recv);
             recvBuf.insert(recvBuf.end(), tempBuf, tempBuf+recvLen);
@@ -186,10 +194,18 @@ void RtspClient::disConnect()
     if(!is_disconnect){
         is_disconnect = true;
         mServer->disconnectClient(this);
-        memcpy(VIDEO_STOP+8,mTerminal.tid,8);
-        mManager->updataSync((const char*)VIDEO_STOP,sizeof(VIDEO_STOP));
-        memcpy(AUDIO_STOP+8,mTerminal.tid,8);
-        mManager->updataSync((const char*)AUDIO_STOP,sizeof(AUDIO_STOP));
+        int32_t pid = (int)syscall(SYS_getpid);
+        int32_t tid = (int)syscall(SYS_gettid);
+        char video_stop[sizeof(VIDEO_STOP)];
+        memcpy(video_stop,VIDEO_STOP,sizeof(VIDEO_STOP));
+        memcpy(video_stop+8,&pid,4);
+        memcpy(video_stop+12,&tid,4);
+        mManager->updataSync((const char*)video_stop,sizeof(video_stop));
+        char audio_stop[sizeof(AUDIO_STOP)];
+        memcpy(audio_stop,AUDIO_STOP,sizeof(AUDIO_STOP));
+        memcpy(audio_stop+8,&pid,4);
+        memcpy(audio_stop+12,&tid,4);
+        mManager->updataSync((const char*)audio_stop,sizeof(audio_stop));
     }
 }
 
@@ -336,10 +352,18 @@ void RtspClient::onPlayRequest(const char* data, int32_t cseq)
         send(mSocket,response.c_str(),response.size(),0);
     }
     {
-        memcpy(VIDEO_START+8,mTerminal.tid,8);
-        mManager->updataSync((const char*)VIDEO_START, sizeof(VIDEO_START));
-        memcpy(AUDIO_START+8,mTerminal.tid,8);
-        mManager->updataSync((const char*)AUDIO_START, sizeof(AUDIO_START));
+        int32_t pid = (int)syscall(SYS_getpid);
+        int32_t tid = (int)syscall(SYS_gettid);
+        char video_start[sizeof(VIDEO_START)];
+	    memcpy(video_start, VIDEO_START, sizeof(VIDEO_START));
+	    memcpy(video_start + 8, &pid, 4);
+	    memcpy(video_start + 12, &tid, 4);
+	    mManager->updataSync((const char*)video_start, sizeof(video_start));
+	    char audio_start[sizeof(AUDIO_START)];
+	    memcpy(audio_start, AUDIO_START, sizeof(AUDIO_START));
+	    memcpy(audio_start + 8, &pid, 4);
+        memcpy(audio_start + 12, &tid, 4);
+	    mManager->updataSync((const char*)audio_start, sizeof(audio_start));
         is_play = true;
     }
 }

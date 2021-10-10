@@ -30,7 +30,7 @@
 #include <termios.h>
 #include <unistd.h>
 
-#define LOG_TAG "ScreenRecord"
+#define LOG_TAG "ZEBRA-MCTL"
 #define ATRACE_TAG ATRACE_TAG_GRAPHICS
 //#define LOG_NDEBUG 0
 #include <utils/Log.h>
@@ -91,7 +91,7 @@ using android::NO_ERROR;
 using android::UNKNOWN_ERROR;
 
 static const uint32_t kMinBitRate = 100000;         // 0.1Mbps
-static const uint32_t kMaxBitRate = 800000;  // 200Mbps
+static const uint32_t kMaxBitRate = 200000;  // 200Mbps
 static const uint32_t kMaxTimeLimitSec = 180;       // 3 minutes
 static const uint32_t kFallbackWidth = 1480;        // 720p
 static const uint32_t kFallbackHeight = 720;
@@ -111,7 +111,7 @@ static bool gWantInfoScreen = false;    // do we want initial info screen?
 static bool gWantFrameTime = false;     // do we want times on each frame?
 static uint32_t gVideoWidth = 720;        // default width+height
 static uint32_t gVideoHeight = 1480;
-static uint32_t gBitRate = 8000000;     // 20Mbps
+static uint32_t gBitRate = 2000000;     // 20Mbps
 static uint32_t gTimeLimitSec = kMaxTimeLimitSec;
 static uint32_t gBframes = 0;
 

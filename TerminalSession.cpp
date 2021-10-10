@@ -7,6 +7,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
+#include <fcntl.h>
 #include "TerminalSession.h"
 #include "Config.h"
 #include "Command.h"
@@ -20,6 +21,8 @@ TerminalSession::TerminalSession(ServerManager* manager)
 ,is_connect(false)
 {
     FLOGD("%s()", __func__);
+    int flags = fcntl(mSocket, F_GETFL, 0);
+    fcntl(mSocket, F_SETFL, flags | O_NONBLOCK);
     mManager->registerListener(this);
     recv_t = new std::thread(&TerminalSession::connThread, this);
     send_t = new std::thread(&TerminalSession::sendThread, this);
@@ -114,14 +117,14 @@ void TerminalSession::connThread()
             int recvLen = recv(mSocket, tempBuf, 4096, 0);
             //FLOGD("TerminalSession recv data size[%d], errno=%d.", recvLen, errno);
             if(recvLen>0){
-                std::lock_guard<std::mutex> lock (mlock_recv);
-                recvBuf.insert(recvBuf.end(), tempBuf, tempBuf+recvLen);
+                std::lock_guard<std::mutex> lock(mlock_recv);
+                recvBuf.insert(recvBuf.end(), tempBuf, tempBuf + recvLen);
                 mcond_recv.notify_one();
-            }else if (recvLen <= 0) {
-                if(recvLen==0 || (!(errno==11 || errno== 0))) {
-                    is_stop = true;
-                    break;
-                }
+            }else if(recvLen == 0 || (!(errno == 11 || errno == 0))) {
+                //TODO::disconnect
+                FLOGE("TerminalSession recv data error, will disconnect, Len[%d]errno[%d].", recvLen, errno);
+                is_connect = false;
+                continue;
             }
         }
     }
@@ -145,19 +148,16 @@ void TerminalSession::sendThread()
             if(is_stop) break;
             while(!is_stop && !sendBuf.empty()){
     	        int32_t sendLen = send(mSocket,(const char*)&sendBuf[0],sendBuf.size(), 0);
-        	    if(sendLen>0){
-                    sendBuf.erase(sendBuf.begin(),sendBuf.begin()+sendLen);
-            	}else if (sendLen < 0) {
-            	    if(errno == 11) {
-                        //TODO::maybe network is slowly!
-                        FLOGE("TerminalClient->sendThread len[%d],errno[%d]",sendLen, errno);
-                        continue;
-                    } else {
-                        FLOGE("TerminalClient send error, len=[%d] errno[%d]!",sendLen, errno);
-        	            is_stop = true;
+        	    if (sendLen < 0) {
+                    if (errno != 11 || errno != 0) {
+                        FLOGE("TerminalSession send error, will disconnect. len[%d]errno[%d]!", sendLen, errno);
+                        is_connect = false;
+                        sendBuf.clear();
                         break;
-        	        }
-            	}
+                    }
+                } else {
+                    sendBuf.erase(sendBuf.begin(), sendBuf.begin() + sendLen);
+                }
     	    }
         }
     }
@@ -173,7 +173,7 @@ void TerminalSession::handThread()
             }
             if(is_stop) break;
             if(((recvBuf[0]&0xFF)!=0xEE)||((recvBuf[1]&0xFF)!=0xAA)){
-                FLOGE("RemoteClient handleData bad header[%02x:%02x]", recvBuf[0]&0xFF, recvBuf[1]&0xFF);
+                FLOGE("TerminalSession handleData bad header[%02x:%02x]", recvBuf[0]&0xFF, recvBuf[1]&0xFF);
                 recvBuf.clear();
                 continue;
             }
@@ -196,7 +196,7 @@ void TerminalSession::sendData(const char* data, int32_t size)
 {
     std::lock_guard<std::mutex> lock (mlock_send);
     if (sendBuf.size() > TERMINAL_MAX_BUFFER) {
-        FLOGD("NOTE::RtspClient send buffer too max, wile clean %zu size", sendBuf.size());
+        FLOGD("NOTE::TerminalSession send buffer too max, wile clean %zu size", sendBuf.size());
     	sendBuf.clear();
     }
     sendBuf.insert(sendBuf.end(), data, data + size);
@@ -206,8 +206,10 @@ void TerminalSession::sendData(const char* data, int32_t size)
 void TerminalSession::timerThread()
 {
     while(!is_stop){
-        memcpy(HEARTBEAT_T+8,mTerminal.tid,8);
-        sendData((const char*)HEARTBEAT_T,sizeof(HEARTBEAT_T));
+        char heartbeat_t[sizeof(HEARTBEAT_T)];
+        memcpy(heartbeat_t,HEARTBEAT_T,sizeof(HEARTBEAT_T));
+        memcpy(heartbeat_t+8,mTerminal.tid,8);
+        sendData((const char*)heartbeat_t,sizeof(heartbeat_t));
         for(int i=0;i<50;i++){
             if(is_stop) break;
             usleep(100000);
