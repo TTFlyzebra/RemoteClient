@@ -72,5 +72,5 @@ LOCAL_CFLAGS :=  \
     -Wno-unused-function \
 
 LOCAL_MODULE_TAGS := optional
-LOCAL_MODULE:= mctl
+LOCAL_MODULE:= mobilectl
 include $(BUILD_EXECUTABLE)
