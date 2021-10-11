@@ -1,39 +1,25 @@
-# Copyright 2013 The Android Open Source Project
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#      http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 LOCAL_PATH:= $(call my-dir)
-
 include $(CLEAR_VARS)
-
 LOCAL_SRC_FILES := \
-    screenrecord.cpp \
-    EglWindow.cpp \
-    FrameOutput.cpp \
-    TextRenderer.cpp \
-    Overlay.cpp \
-    Program.cpp \
-	TerminalSession.cpp \
-    ServerManager.cpp \
-    EncoderVideo.cpp \
-    EncoderAudio.cpp \
-    RtspServer.cpp \
-    RtspClient.cpp \
-    InputServer.cpp \
-    InputClient.cpp \
+    main.cpp \
     Base64.cpp \
     Global.cpp \
-    main.cpp \
+    ServerManager.cpp \
+    remotecore/TerminalSession.cpp \
+    remotecore/EncoderVideo.cpp \
+    remotecore/EncoderAudio.cpp \
+    remotecore/RtspServer.cpp \
+    remotecore/RtspClient.cpp \
+    remotecore/InputServer.cpp \
+    remotecore/InputClient.cpp \
+    screenrecord/screenrecord.cpp \
+    screenrecord/EglWindow.cpp \
+    screenrecord/FrameOutput.cpp \
+    screenrecord/TextRenderer.cpp \
+    screenrecord/Overlay.cpp \
+    screenrecord/Program.cpp \
+    zebraservice/android/zebra/IZebraService.aidl \
+    zebraservice/ZebraService.cpp \
 
 LOCAL_SHARED_LIBRARIES := \
 	libstagefright \

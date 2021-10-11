@@ -7,7 +7,6 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <cutils/properties.h>
-
 #include "EncoderAudio.h"
 #include "HandlerEvent.h"
 #include "Command.h"
