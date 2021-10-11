@@ -166,18 +166,26 @@ void InputServer::handleInputEvent()
             break;
         case TYPE_INPUT_KEY:
             {
-                inputKey(key_fd, (int16_t)(data[17]&0xFF));
+                if(0x03 == (data[17]&0xFF)){
+                    const char* kCommand = "/system/bin/input";
+                    const char* const argv[] = {kCommand, "keyevent","3"};
+                    execv(kCommand, (char* const*)(argv));
+                    FLOGE("%s", kCommand);
+                }else{
+                    inputKey(key_fd, (int16_t)(data[17]&0xFF));
+                }
             }
             break;
         case TYPE_INPUT_TEXT:
             {
                 std::lock_guard<std::mutex> lock (mlock_event);
                 int32_t dLen = (data[4]&0xFF)<<24|(data[5]&0xFF)<<16|(data[6]&0xFF)<<8|(data[7]&0xFF);
-                char text[dLen-8];
-                memcpy(text,data+16,dLen-8);
-                char temp[dLen+8];
-                sprintf(temp, "input text %s", text);
-                system(temp);
+                char text[4096] = {0};
+                int32_t maxSize = (dLen-8)>4095?4095:(dLen-8);
+                memcpy(text,data+16,maxSize);
+                const char* kCommand = "/system/bin/input";
+                const char* const argv[] = {"text",text};
+                execv(kCommand, (char* const*)(argv));
             }
             break;
         }
@@ -265,6 +273,14 @@ void InputServer::inputTouch(int32_t fd, int16_t x, int16_t y, int16_t action)
     _event6.code = SYN_REPORT;
     _event6.value = 0;
     ret = write(fd,&_event6,sizeof(_event6));
+}
+
+void InputServer::runCommand(const char *kCommand, char* const argv[]){
+    pid_t pid = fork();
+    if (pid >= 0){
+        execv(kCommand, argv);
+        exit(1);
+    }
 }
 
 

@@ -23,6 +23,7 @@ private:
     void handleInputEvent();
     void inputKey(int32_t fd, int16_t key);
     void inputTouch(int32_t fd, int16_t x, int16_t y, int16_t action);
+    void runCommand(const char *kCommand, char* const argv[]);
 
 private:
     ServerManager* mManager;

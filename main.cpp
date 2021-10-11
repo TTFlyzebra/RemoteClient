@@ -7,15 +7,15 @@
 #include <sys/stat.h>
 #include <binder/IPCThreadState.h>
 #include <cutils/properties.h>
-
 #include "ServerManager.h"
-#include "TerminalSession.h"
-#include "RtspServer.h"
-#include "InputServer.h"
-#include "EncoderAudio.h"
-#include "EncoderVideo.h"
 #include "Global.h"
 #include "FlyLog.h"
+#include "remotecore/TerminalSession.h"
+#include "remotecore/RtspServer.h"
+#include "remotecore/InputServer.h"
+#include "remotecore/EncoderAudio.h"
+#include "remotecore/EncoderVideo.h"
+#include "zebraservice/ZebraService.h"
 
 using namespace android;
 
@@ -59,6 +59,7 @@ static status_t configureSignals()
 
 int32_t main(int32_t  argc,  char*  argv[])
 {
+    FLOGD("###mobilectl Ver 1.0 Date 20210921###");
     FLOGD("main client is start.\n");
     signal(SIGPIPE, SIG_IGN);
     isStop = false;
@@ -67,8 +68,6 @@ int32_t main(int32_t  argc,  char*  argv[])
 
     androidSetThreadPriority(gettid(), -10);
     sp<ProcessState> proc(ProcessState::self());
-    ProcessState::self()->startThreadPool();
-
     char temp[PROPERTY_VALUE_MAX] = {0};
     property_get("persist.sys.nv.sn", temp, "0");
     int64_t sn = strtoul(temp, NULL, 10);
@@ -80,6 +79,10 @@ int32_t main(int32_t  argc,  char*  argv[])
     TerminalSession* session = new TerminalSession(manager);
     sp<EncoderAudio> audio = new EncoderAudio(manager);
     sp<EncoderVideo> video = new EncoderVideo(manager);
+
+    int32_t ret = ZebraService::init(manager);
+    ProcessState::self()->startThreadPool();
+    IPCThreadState::self()->joinThreadPool();
     while(!isStop){
         usleep(1000000);
     }

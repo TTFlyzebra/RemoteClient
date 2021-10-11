@@ -5,7 +5,7 @@
 #include <media/stagefright/foundation/ABuffer.h>
 
 #include "EncoderVideo.h"
-#include "screenrecord.h"
+#include "screenrecord/screenrecord.h"
 #include "HandlerEvent.h"
 #include "Command.h"
 #include "Global.h"
