@@ -77,15 +77,18 @@ int32_t main(int32_t  argc,  char*  argv[])
     InputServer* input = new InputServer(manager);
     RtspServer* rtsp = new RtspServer(manager);
     TerminalSession* session = new TerminalSession(manager);
+
     sp<EncoderAudio> audio = new EncoderAudio(manager);
     sp<EncoderVideo> video = new EncoderVideo(manager);
 
     int32_t ret = ZebraService::init(manager);
     ProcessState::self()->startThreadPool();
     IPCThreadState::self()->joinThreadPool();
+
     while(!isStop){
         usleep(1000000);
     }
+
     delete input;
     delete rtsp;
     delete session;
