@@ -18,8 +18,9 @@ LOCAL_SRC_FILES := \
     inputserver/InputServer.cpp \
     inputserver/InputClient.cpp \
     remotecore/TerminalSession.cpp \
-    zebraservice/android/zebra/IZebraService.aidl \
-    zebraservice/ZebraService.cpp \
+
+#    zebraservice/android/zebra/IZebraService.aidl \
+#    zebraservice/ZebraService.cpp \
 
 LOCAL_SHARED_LIBRARIES := \
 	libstagefright \
@@ -43,10 +44,11 @@ LOCAL_SHARED_LIBRARIES := \
 	libpostproc-54 \
 	libswresample-2 \
 	libswscale-4 \
-	libhardware \
-    libhidlbase \
-    libhidltransport \
-    android.hardware.zebra@1.0 \
+
+#	 libhardware \
+#    libhidlbase \
+#    libhidltransport \
+#    android.hardware.zebra@1.0 \
 
 LOCAL_C_INCLUDES := \
 	frameworks/av/media/libstagefright \

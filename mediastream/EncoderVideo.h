@@ -27,7 +27,9 @@ protected:
 
 private:
     ServerManager* mManager;
-    bool is_stop;
+    volatile bool is_stop;
+    volatile bool is_record;
+    volatile bool is_re_record;
 
     int32_t sequencenumber;
 

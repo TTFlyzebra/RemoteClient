@@ -74,6 +74,8 @@ private:
 
     std::mutex mlock_temp;
 
+    int32_t mPid;
+    int32_t mTid;
 };
 
 #endif //ANDROID_RRSPCLIENT_H

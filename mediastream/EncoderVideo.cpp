@@ -16,6 +16,8 @@ using namespace android;
 EncoderVideo::EncoderVideo(ServerManager* manager)
 :mManager(manager)
 ,is_stop(false)
+,is_record(false)
+,is_re_record(false)
 ,sequencenumber(0)
 {
     FLOGD("%s()", __func__);
@@ -44,6 +46,20 @@ int32_t EncoderVideo::notify(const char* data, int32_t size)
     struct NotifyData* notifyData = (struct NotifyData*)data;
     switch (notifyData->type){
     case TYPE_VIDEO_START:
+        is_re_record = true;
+        {
+            lastHeartBeat = systemTime(CLOCK_MONOTONIC);
+            std::lock_guard<std::mutex> lock (mlock_work);
+            std::map<int64_t, int64_t>::iterator it = mTerminals.find((int64_t)notifyData->data);
+            if(it != mTerminals.end()){
+                it->second = lastHeartBeat;
+            }else{
+                mTerminals.emplace((int64_t)notifyData->data,lastHeartBeat);
+                mcond_work.notify_one();
+            }
+            FLOGD("EncoderVideo recv start mTerminals.size=%zu", mTerminals.size());
+        }
+        return 1;
     case TYPE_HEARTBEAT_VIDEO:
         {
             lastHeartBeat = systemTime(CLOCK_MONOTONIC);
@@ -61,6 +77,7 @@ int32_t EncoderVideo::notify(const char* data, int32_t size)
         {
             std::lock_guard<std::mutex> lock (mlock_work);
             mTerminals.erase((int64_t)notifyData->data);
+            FLOGD("EncoderVideo recv stop mTerminals.size=%zu", mTerminals.size());
         }
         return 1;
     }
@@ -76,54 +93,54 @@ void EncoderVideo::onMessageReceived(const sp<AMessage> &msg)
             CHECK(msg->findInt32("type", &type));
             switch (type) {
                 case kWhatSPSPPSData:
-                    {
-                        sequencenumber++;
-                        sp<ABuffer> data;
-                        CHECK(msg->findBuffer("data", &data));
-                        char spspps[sizeof(SPSPPS_DATA)];
-                        memcpy(spspps,SPSPPS_DATA,sizeof(SPSPPS_DATA));
-                        int32_t size = data->capacity()+16;
-                        spspps[4] = (size & 0xFF000000) >> 24;
-                        spspps[5] = (size & 0xFF0000) >> 16;
-                        spspps[6] = (size & 0xFF00) >> 8;
-                        spspps[7] =  size & 0xFF;
-                        memcpy(spspps+8,mTerminal.tid,8);
-                        spspps[16] = (sequencenumber & 0xFF000000) >> 24;
-                        spspps[17] = (sequencenumber & 0xFF0000) >> 16;
-                        spspps[18] = (sequencenumber & 0xFF00) >> 8;
-                        spspps[19] =  sequencenumber & 0xFF;                       
-                        std::lock_guard<std::mutex> lock (mManager->mlock_up);
-                        mManager->updataAsync(spspps, sizeof(spspps));
-                        mManager->updataAsync((const char *)data->data(), data->capacity());
-                    }
+                {
+                    sequencenumber++;
+                    sp<ABuffer> data;
+                    CHECK(msg->findBuffer("data", &data));
+                    char spspps[sizeof(SPSPPS_DATA)];
+                    memcpy(spspps,SPSPPS_DATA,sizeof(SPSPPS_DATA));
+                    int32_t size = data->capacity()+16;
+                    spspps[4] = (size & 0xFF000000) >> 24;
+                    spspps[5] = (size & 0xFF0000) >> 16;
+                    spspps[6] = (size & 0xFF00) >> 8;
+                    spspps[7] =  size & 0xFF;
+                    memcpy(spspps+8,mTerminal.tid,8);
+                    spspps[16] = (sequencenumber & 0xFF000000) >> 24;
+                    spspps[17] = (sequencenumber & 0xFF0000) >> 16;
+                    spspps[18] = (sequencenumber & 0xFF00) >> 8;
+                    spspps[19] =  sequencenumber & 0xFF;
+                    std::lock_guard<std::mutex> lock (mManager->mlock_up);
+                    mManager->updataAsync(spspps, sizeof(spspps));
+                    mManager->updataAsync((const char *)data->data(), data->capacity());
+                }
                     break;
                 case kWhatVideoFrameData:
-                    {
-                        sequencenumber++;
-                        sp<ABuffer> data;
-                        CHECK(msg->findBuffer("data", &data));
-                        int64_t ptsUsec;
-                        CHECK(msg->findInt64("ptsUsec", &ptsUsec));
-                        char vdata[sizeof(VIDEO_DATA)];
-                        memcpy(vdata,VIDEO_DATA,sizeof(VIDEO_DATA));
-                        int32_t size = data->capacity()+16;
-                        vdata[4] = (size & 0xFF000000) >> 24;
-                        vdata[5] = (size & 0xFF0000) >> 16;
-                        vdata[6] = (size & 0xFF00) >> 8;
-                        vdata[7] =  size & 0xFF;
-                        memcpy(vdata+8,mTerminal.tid,8);
-                        vdata[16] = (sequencenumber & 0xFF000000) >> 24;
-                        vdata[17] = (sequencenumber & 0xFF0000) >> 16;
-                        vdata[18] = (sequencenumber & 0xFF00) >> 8;
-                        vdata[19] =  sequencenumber & 0xFF; 
-                        vdata[20] = (ptsUsec & 0xFF000000) >> 24;
-                        vdata[21] = (ptsUsec & 0xFF0000) >> 16;
-                        vdata[22] = (ptsUsec & 0xFF00) >> 8;
-                        vdata[23] =  ptsUsec & 0xFF;
-                        std::lock_guard<std::mutex> lock (mManager->mlock_up);
-                        mManager->updataAsync(vdata, sizeof(vdata));
-                        mManager->updataAsync((const char *)data->data(), data->capacity());
-                    }
+                {
+                    sequencenumber++;
+                    sp<ABuffer> data;
+                    CHECK(msg->findBuffer("data", &data));
+                    int64_t ptsUsec;
+                    CHECK(msg->findInt64("ptsUsec", &ptsUsec));
+                    char vdata[sizeof(VIDEO_DATA)];
+                    memcpy(vdata,VIDEO_DATA,sizeof(VIDEO_DATA));
+                    int32_t size = data->capacity()+16;
+                    vdata[4] = (size & 0xFF000000) >> 24;
+                    vdata[5] = (size & 0xFF0000) >> 16;
+                    vdata[6] = (size & 0xFF00) >> 8;
+                    vdata[7] =  size & 0xFF;
+                    memcpy(vdata+8,mTerminal.tid,8);
+                    vdata[16] = (sequencenumber & 0xFF000000) >> 24;
+                    vdata[17] = (sequencenumber & 0xFF0000) >> 16;
+                    vdata[18] = (sequencenumber & 0xFF00) >> 8;
+                    vdata[19] =  sequencenumber & 0xFF;
+                    vdata[20] = (ptsUsec & 0xFF000000) >> 24;
+                    vdata[21] = (ptsUsec & 0xFF0000) >> 16;
+                    vdata[22] = (ptsUsec & 0xFF00) >> 8;
+                    vdata[23] =  ptsUsec & 0xFF;
+                    std::lock_guard<std::mutex> lock (mManager->mlock_up);
+                    mManager->updataAsync(vdata, sizeof(vdata));
+                    mManager->updataAsync((const char *)data->data(), data->capacity());
+                }
                     break;
             }
         }
@@ -146,7 +163,10 @@ void EncoderVideo::loopStart()
         }
         if(is_stop) return;
         FLOGD("EncoderVideo screenrecord start");
+        is_re_record = false;
+        is_record = true;
         screenrecord_start(msg);
+        is_record = false;
         FLOGD("EncoderVideo screenrecord end");
     }
     looper->unregisterHandler(id());
@@ -164,16 +184,25 @@ void EncoderVideo::clientChecked()
             std::lock_guard<std::mutex> lock (mlock_work);
             std::map<int64_t, int64_t>::iterator it = mTerminals.begin();
             while(it != mTerminals.end()){
-                int32_t lastTime = ((systemTime(SYSTEM_TIME_MONOTONIC) - it->second)/1000000)&0xFFFFFFFF;
-                if(lastTime>60000){
+                int32_t time = ((systemTime(SYSTEM_TIME_MONOTONIC) - it->second)/1000000)&0xFFFFFFFF;
+                if(time > 61000){
                     it = mTerminals.erase(it);
+                    FLOGD("EncoderVideo timeout to remove client! size=%zu", mTerminals.size());
                 }else{
                     it++;
                 }
             }
         }
-        if(mTerminals.empty()){
+        if(mTerminals.empty() || is_re_record){
             screenrecord_stop();
+            for(int i=0;i<30;i++){
+                if(is_stop) break;
+                usleep(100000);
+            }
+            if(is_re_record) {
+                FLOGE("EncoderVideo can't stop screen record, will exit");
+                exit(1);
+            }
         }
     }
     return;
