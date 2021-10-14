@@ -5,19 +5,19 @@ LOCAL_SRC_FILES := \
     Base64.cpp \
     Global.cpp \
     ServerManager.cpp \
-    remotecore/TerminalSession.cpp \
-    remotecore/EncoderVideo.cpp \
-    remotecore/EncoderAudio.cpp \
-    remotecore/RtspServer.cpp \
-    remotecore/RtspClient.cpp \
-    remotecore/InputServer.cpp \
-    remotecore/InputClient.cpp \
     screenrecord/screenrecord.cpp \
     screenrecord/EglWindow.cpp \
     screenrecord/FrameOutput.cpp \
     screenrecord/TextRenderer.cpp \
     screenrecord/Overlay.cpp \
     screenrecord/Program.cpp \
+    rtspserver/RtspServer.cpp \
+    rtspserver/RtspClient.cpp \
+    mediastream/EncoderVideo.cpp \
+    mediastream/EncoderAudio.cpp \
+    inputserver/InputServer.cpp \
+    inputserver/InputClient.cpp \
+    remotecore/TerminalSession.cpp \
     zebraservice/android/zebra/IZebraService.aidl \
     zebraservice/ZebraService.cpp \
 
@@ -42,7 +42,11 @@ LOCAL_SHARED_LIBRARIES := \
 	libavutil-55 \
 	libpostproc-54 \
 	libswresample-2 \
-	libswscale-4
+	libswscale-4 \
+	libhardware \
+    libhidlbase \
+    libhidltransport \
+    android.hardware.zebra@1.0 \
 
 LOCAL_C_INCLUDES := \
 	frameworks/av/media/libstagefright \

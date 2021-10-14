@@ -96,7 +96,6 @@ private:
     Vector<sp<MediaCodecBuffer>> inBuffers;
 
     volatile bool is_stop;
-    volatile bool is_codec;
 
     std::mutex mlock_temp;
     std::vector<int32_t> temp_clients;

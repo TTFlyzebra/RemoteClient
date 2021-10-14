@@ -2,12 +2,13 @@
 // Created by FlyZebra on 2021/10/11 0011.
 //
 
-#include "ZebraService.h"
 #include <binder/IServiceManager.h>
 #include <binder/IPCThreadState.h>
+
+#include "ZebraService.h"
 #include "FlyLog.h"
 
-using namespace android;
+namespace android {
 
 int32_t ZebraService::init(ServerManager* manager)
 {
@@ -16,15 +17,28 @@ int32_t ZebraService::init(ServerManager* manager)
 
 ZebraService::ZebraService(ServerManager* manager)
 : mManager(manager)
+, hwZebra(IZebra::getService())
 {
     FLOGD("%s",__func__);
     mManager->registerListener(this);
+    if(hwZebra==nullptr){
+        FLOGE("Get hw zebra service error!");
+    }else{
+        hwZebra->helloWorld("Zebra", [&](hidl_string result){
+            FLOGE("IZebra helloWorld %s", result.c_str());
+        });
+    }
 }
 
 ZebraService::~ZebraService()
 {
     mManager->unRegisterListener(this);
     FLOGD("%s",__func__);
+}
+
+int32_t ZebraService::notify(const char* data, int32_t size)
+{
+    return 0;
 }
 
 status_t ZebraService::onTransact(uint32_t code, const Parcel& data, Parcel* reply, uint32_t flags)
@@ -51,8 +65,5 @@ status_t ZebraService::onTransact(uint32_t code, const Parcel& data, Parcel* rep
     }
 }
 
-int32_t ZebraService::notify(const char* data, int32_t size)
-{
-    return 0;
 }
 

@@ -8,7 +8,16 @@
 #include <utils/RefBase.h>
 #include <binder/IInterface.h>
 #include <binder/Parcel.h>
+
+#include <android/hardware/zebra/1.0/IZebra.h>
+#include <hidl/Status.h>
+#include <hidl/LegacySupport.h>
+#include <hidl/HidlSupport.h>
+
 #include "ServerManager.h"
+
+using ::android::hardware::hidl_string;
+using ::android::hardware::zebra::V1_0::IZebra;
 
 namespace android {
 
@@ -25,6 +34,7 @@ public:
 
 private:
     ServerManager* mManager;
+    sp<IZebra> hwZebra;
 };
 
 }//namespace android

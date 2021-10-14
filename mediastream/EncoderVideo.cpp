@@ -145,9 +145,9 @@ void EncoderVideo::loopStart()
             }
         }
         if(is_stop) return;
-        FLOGE("EncoderVideo screenrecord start");
+        FLOGD("EncoderVideo screenrecord start");
         screenrecord_start(msg);
-        FLOGE("EncoderVideo screenrecord end");
+        FLOGD("EncoderVideo screenrecord end");
     }
     looper->unregisterHandler(id());
     looper->stop();
