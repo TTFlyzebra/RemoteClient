@@ -81,7 +81,7 @@ int32_t main(int32_t  argc,  char*  argv[])
     sp<EncoderAudio> audio = new EncoderAudio(manager);
     sp<EncoderVideo> video = new EncoderVideo(manager);
 
-    int32_t ret = ZebraService::init(manager);
+    //int32_t ret = ZebraService::init(manager);
     ProcessState::self()->startThreadPool();
     IPCThreadState::self()->joinThreadPool();
 

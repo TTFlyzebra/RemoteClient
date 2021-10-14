@@ -116,6 +116,8 @@ void EncoderAudio::serverSocket()
     	    if (server_socket < 0) {
     	       close(server_socket);
     	       FLOGE("EncoderAudio localsocket server error %s errno: %d", strerror(errno), errno);
+    	       usleep(2000000);
+    	       exit(1);
     	       continue;
     	    }
     	} else {
@@ -128,6 +130,8 @@ void EncoderAudio::serverSocket()
             if (server_socket < 0) {
                 close(server_socket);
                 FLOGE("EncoderAudio socket server error %s errno: %d", strerror(errno), errno);
+                usleep(2000000);
+                exit(1);
                 continue;;
             }
             ret = bind(server_socket,(struct sockaddr *) &t_sockaddr,sizeof(t_sockaddr));

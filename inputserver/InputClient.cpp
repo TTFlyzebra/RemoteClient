@@ -24,8 +24,6 @@ InputClient::InputClient(InputServer* server, ServerManager* manager, int32_t so
     FLOGD("%s()", __func__);
     mManager->registerListener(this);
     recv_t = new std::thread(&InputClient::recvThread, this);
-    send_t = new std::thread(&InputClient::sendThread, this);
-    hand_t = new std::thread(&InputClient::handleData, this);
 }
 
 InputClient::~InputClient()
@@ -60,6 +58,8 @@ int32_t InputClient::notify(const char* data, int32_t size)
 
 void InputClient::recvThread()
 {
+    send_t = new std::thread(&InputClient::sendThread, this);
+    hand_t = new std::thread(&InputClient::handleData, this);
     char tempBuf[4096];
     while(!is_stop){
         memset(tempBuf,0,4096);
@@ -106,13 +106,29 @@ void InputClient::sendThread()
 void InputClient::handleData()
 {
     while(!is_stop){
-        std::unique_lock<std::mutex> lock (mlock_recv);
-        while (!is_stop && recvBuf.empty()) {
-            mcond_recv.wait(lock);
+        {
+            std::unique_lock<std::mutex> lock (mlock_recv);
+            while (!is_stop && recvBuf.size() < 8) {
+                mcond_recv.wait(lock);
+            }
+            if(is_stop) break;
+            if(((recvBuf[0]&0xFF)!=0xEE)||((recvBuf[1]&0xFF)!=0xAA)){
+                FLOGE("TerminalSession handleData bad header[%02x:%02x]", recvBuf[0]&0xFF, recvBuf[1]&0xFF);
+                recvBuf.clear();
+                continue;
+            }
         }
-        if(is_stop) break;
-        std::fill(recvBuf.begin(), recvBuf.end(), 0);
-        recvBuf.clear();
+        {
+            std::unique_lock<std::mutex> lock (mlock_recv);
+            int32_t dLen = (recvBuf[4]&0xFF)<<24|(recvBuf[5]&0xFF)<<16|(recvBuf[6]&0xFF)<<8|(recvBuf[7]&0xFF);
+            int32_t aLen = dLen + 8;
+            while(!is_stop && (aLen>(int32_t)recvBuf.size())) {
+                mcond_recv.wait(lock);
+            }
+            if(is_stop) break;
+            mManager->updataSync(&recvBuf[0], aLen);
+            recvBuf.erase(recvBuf.begin(),recvBuf.begin()+aLen);
+        }
     }
 }
 

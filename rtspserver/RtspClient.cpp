@@ -26,12 +26,12 @@ RtspClient::RtspClient(RtspServer* server, ServerManager* manager, int32_t socke
 ,sequencenumber1(0)
 ,sequencenumber2(0)
 ,conn_type(RTP_TCP)
+,mPid(0)
+,mTid(0)
 {
     FLOGD("%s()", __func__);
     mManager->registerListener(this);
     recv_t = new std::thread(&RtspClient::recvThread, this);
-    send_t = new std::thread(&RtspClient::sendThread, this);
-    hand_t = new std::thread(&RtspClient::handleData, this);
 }
 
 RtspClient::~RtspClient()
@@ -80,10 +80,15 @@ int32_t RtspClient::notify(const char* data, int32_t size)
 
 void RtspClient::recvThread()
 {
+    mPid = (int32_t)syscall(SYS_getpid);
+    mTid = (int32_t)syscall(SYS_gettid);
+    send_t = new std::thread(&RtspClient::sendThread, this);
+    hand_t = new std::thread(&RtspClient::handleData, this);
+
     char tempBuf[4096];
     while(!is_stop){
         memset(tempBuf,0,4096);
-        int recvLen = recv(mSocket, tempBuf, 4096, 0);
+        int32_t recvLen = recv(mSocket, tempBuf, 4096, 0);
         FLOGD("RtspClient recv:len=[%d], errno=[%d]\n%s", recvLen, errno, tempBuf);
         if (recvLen <= 0) {
             if(recvLen==0 || (!(errno==11 || errno== 0))) {
@@ -92,17 +97,15 @@ void RtspClient::recvThread()
             }
         }else{
             if(is_play){
-            	int32_t pid = (int)syscall(SYS_getpid);
-            	int32_t tid = (int)syscall(SYS_gettid);
                 char heartbeat_audio[sizeof(HEARTBEAT_AUDIO)];
                 memcpy(heartbeat_audio,HEARTBEAT_AUDIO,sizeof(HEARTBEAT_AUDIO));
-                memcpy(heartbeat_audio+8,&pid,4);
-                memcpy(heartbeat_audio+12,&tid,4);
+                memcpy(heartbeat_audio+8,&mPid,4);
+                memcpy(heartbeat_audio+12,&mTid,4);
                 mManager->updataSync((const char*)heartbeat_audio, sizeof(heartbeat_audio));
                 char heartbeat_video[sizeof(HEARTBEAT_VIDEO)];
-                memcpy(heartbeat_audio,HEARTBEAT_VIDEO,sizeof(HEARTBEAT_VIDEO));
-                memcpy(heartbeat_audio+8,&pid,4);
-                memcpy(heartbeat_audio+12,&tid,4);
+                memcpy(heartbeat_video,HEARTBEAT_VIDEO,sizeof(HEARTBEAT_VIDEO));
+                memcpy(heartbeat_video+8,&mPid,4);
+                memcpy(heartbeat_video+12,&mTid,4);
                 mManager->updataSync((const char*)heartbeat_video, sizeof(heartbeat_video));
             }
             std::lock_guard<std::mutex> lock (mlock_recv);
@@ -194,17 +197,15 @@ void RtspClient::disConnect()
     if(!is_disconnect){
         is_disconnect = true;
         mServer->disconnectClient(this);
-        int32_t pid = (int)syscall(SYS_getpid);
-        int32_t tid = (int)syscall(SYS_gettid);
         char video_stop[sizeof(VIDEO_STOP)];
         memcpy(video_stop,VIDEO_STOP,sizeof(VIDEO_STOP));
-        memcpy(video_stop+8,&pid,4);
-        memcpy(video_stop+12,&tid,4);
+        memcpy(video_stop+8,&mPid,4);
+        memcpy(video_stop+12,&mTid,4);
         mManager->updataSync((const char*)video_stop,sizeof(video_stop));
         char audio_stop[sizeof(AUDIO_STOP)];
         memcpy(audio_stop,AUDIO_STOP,sizeof(AUDIO_STOP));
-        memcpy(audio_stop+8,&pid,4);
-        memcpy(audio_stop+12,&tid,4);
+        memcpy(audio_stop+8,&mPid,4);
+        memcpy(audio_stop+12,&mTid,4);
         mManager->updataSync((const char*)audio_stop,sizeof(audio_stop));
     }
 }
@@ -283,7 +284,7 @@ void RtspClient::onDescribeRequest(const char* data, int32_t cseq)
     spd.append("a=control:track2\r\n\r\n");
 
     memset(temp,0,strlen(temp));
-    sprintf(temp, "Content-Length: %d\r\n",(int)spd.size());
+    sprintf(temp, "Content-Length: %d\r\n",(int32_t)spd.size());
     response.append(temp);
     response.append("Content-Type: application/sdp\r\n");
     response.append("\r\n");
@@ -352,17 +353,15 @@ void RtspClient::onPlayRequest(const char* data, int32_t cseq)
         send(mSocket,response.c_str(),response.size(),0);
     }
     {
-        int32_t pid = (int)syscall(SYS_getpid);
-        int32_t tid = (int)syscall(SYS_gettid);
         char video_start[sizeof(VIDEO_START)];
 	    memcpy(video_start, VIDEO_START, sizeof(VIDEO_START));
-	    memcpy(video_start + 8, &pid, 4);
-	    memcpy(video_start + 12, &tid, 4);
+	    memcpy(video_start + 8, &mPid, 4);
+	    memcpy(video_start + 12, &mTid, 4);
 	    mManager->updataSync((const char*)video_start, sizeof(video_start));
 	    char audio_start[sizeof(AUDIO_START)];
 	    memcpy(audio_start, AUDIO_START, sizeof(AUDIO_START));
-	    memcpy(audio_start + 8, &pid, 4);
-        memcpy(audio_start + 12, &tid, 4);
+	    memcpy(audio_start + 8, &mPid, 4);
+        memcpy(audio_start + 12, &mTid, 4);
 	    mManager->updataSync((const char*)audio_start, sizeof(audio_start));
         is_play = true;
     }
