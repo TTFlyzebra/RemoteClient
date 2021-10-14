@@ -10,11 +10,11 @@
 #include "ServerManager.h"
 #include "Global.h"
 #include "FlyLog.h"
+#include "mediastream/EncoderAudio.h"
+#include "mediastream/EncoderVideo.h"
 #include "remotecore/TerminalSession.h"
-#include "remotecore/RtspServer.h"
-#include "remotecore/InputServer.h"
-#include "remotecore/EncoderAudio.h"
-#include "remotecore/EncoderVideo.h"
+#include "rtspserver/RtspServer.h"
+#include "inputserver/InputServer.h"
 #include "zebraservice/ZebraService.h"
 
 using namespace android;
@@ -59,7 +59,7 @@ static status_t configureSignals()
 
 int32_t main(int32_t  argc,  char*  argv[])
 {
-    FLOGD("###mobilectl Ver 1.0 Date 20210921###");
+    FLOGD("###mobilectl Ver 1.0 Date 2021013###");
     FLOGD("main client is start.\n");
     signal(SIGPIPE, SIG_IGN);
     isStop = false;

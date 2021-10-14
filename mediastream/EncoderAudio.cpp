@@ -19,7 +19,6 @@ using namespace android;
 EncoderAudio::EncoderAudio(ServerManager* manager)
 :mManager(manager)
 ,is_stop(false)
-,is_codec(false)
 ,out_buf((uint8_t *)av_malloc(OUT_SAMPLE_RATE))
 ,sequencenumber(0)
 {
@@ -57,7 +56,6 @@ EncoderAudio::~EncoderAudio()
     swr_cxts.clear();
     if (out_buf) av_free(out_buf);
 
-    codecRelease();    
     server_t->join();
     check_t->join();
     delete server_t;
@@ -101,6 +99,7 @@ void EncoderAudio::onMessageReceived(const sp<AMessage> &msg)
 void EncoderAudio::serverSocket()
 {
 	FLOGD("EncoderAudio serverSocket start!");
+	codecInit();
     while(!is_stop) {
         {
             std::unique_lock<std::mutex> lock (mlock_work);
@@ -109,17 +108,13 @@ void EncoderAudio::serverSocket()
     	    }
         }
         if(is_stop) return;
-        codecInit(); 
-        if(is_stop) {
-            codecRelease();
-            return;
-        }
         int32_t ret;
     	char temp[PROPERTY_VALUE_MAX] = {0};
     	property_get(PROP_IP, temp, SERVER_IP);
     	if(temp[0]<'0' || temp[0] > '9'){
     	    server_socket = socket_local_server(temp, ANDROID_SOCKET_NAMESPACE_ABSTRACT, SOCK_STREAM);
     	    if (server_socket < 0) {
+    	       close(server_socket);
     	       FLOGE("EncoderAudio localsocket server error %s errno: %d", strerror(errno), errno);
     	       continue;
     	    }
@@ -131,23 +126,27 @@ void EncoderAudio::serverSocket()
             t_sockaddr.sin_port = htons(AUDIO_SERVER_TCP_PORT);
             server_socket = socket(AF_INET, SOCK_STREAM, 0);
             if (server_socket < 0) {
+                close(server_socket);
                 FLOGE("EncoderAudio socket server error %s errno: %d", strerror(errno), errno);
                 continue;;
             }
             ret = bind(server_socket,(struct sockaddr *) &t_sockaddr,sizeof(t_sockaddr));
             if (ret < 0) {
+                close(server_socket);
                 FLOGE( "EncoderAudio bind %d socket error %s errno: %d", AUDIO_SERVER_TCP_PORT, strerror(errno), errno);
                 continue;;
             }
         }
         ret = listen(server_socket, 1);
         if (ret < 0) {
+            close(server_socket);
             FLOGE("EncoderAudio listen error %s errno: %d", strerror(errno), errno);
             continue;;
         }
         while(!is_stop && !mTerminals.empty()){
             int32_t client_socket = accept(server_socket, (struct sockaddr*)NULL, NULL);
             if(client_socket < 0) {
+                close(client_socket);
                 FLOGE("EncoderAudio accpet socket error: %s errno :%d", strerror(errno), errno);
                 continue;
             }
@@ -165,8 +164,8 @@ void EncoderAudio::serverSocket()
             }
         }
         close(server_socket);
-        codecRelease();
     }
+    codecRelease();
     FLOGD("EncoderAudio serverSocket exit!");
 	return;
 }
@@ -180,36 +179,62 @@ void EncoderAudio::clientSocket()
 	    socket_fd = temp_clients.back();
 	    temp_clients.pop_back();
 	}
-	unsigned char recvBuf[4096];
+	unsigned char recvBuf[1024];
     int32_t recvLen;
+    bool is_firstclean = false;
 	while(!is_stop){
-	    if(!is_stop  && is_codec){
-	        recvLen = recv(socket_fd, recvBuf, 18, 0);
-	    }else{
-	        recvLen = recv(socket_fd, recvBuf, 4096, 0);
+	    if( is_stop || mTerminals.empty()){
+	        recvLen = recv(socket_fd, recvBuf, 1024, 0);
 	        continue;
 	    }
+
+        //first clear buffer
+	    while(!is_firstclean && !is_stop){
+	        recvLen = recv(socket_fd, recvBuf, 1024, 0);
+	        if(recvLen < 2){
+	            FLOGE("EncoderAudio recv data error! len=%d, errno=%d", recvLen, errno);
+	            goto EXIT;
+	        }
+	        if(recvLen==1024){
+                continue;
+            }
+	        if((recvBuf[recvLen-2]!=(unsigned char)0x7E) && (recvBuf[recvLen-1]!=(unsigned char)0x0D)){
+	            continue;
+	        }else{
+	            is_firstclean = true;
+	        }
+	    }
+	    if(is_stop) goto EXIT;
+
+	    recvLen = recv(socket_fd, recvBuf, 18, 0);
 	    if (recvLen < 18 || (recvBuf[0]!=(unsigned char)0x7E) || (recvBuf[1]!=(unsigned char)0xA5)){
 	        if(recvLen>=16 && (recvBuf[8]==(unsigned char)0x04) && (recvBuf[9]==(unsigned char)0x52)) {
 	            continue;
 	        }
+	        FLOGE("EncoderAudio recv data error! len&head");
             goto EXIT;
         }
 
         if ((recvBuf[8]==(unsigned char)0x04) && (recvBuf[9]==(unsigned char)0x4A)){
             recvLen = recv(socket_fd, recvBuf, 4, 0);
-            if(recvLen<4) goto EXIT;
+            if(recvLen<4) {
+                FLOGE("EncoderAudio recv data error! recvLen=%d", recvLen);
+                goto EXIT;
+            }
             continue;
         }
 
         if ((recvBuf[8]==(unsigned char)0x04) && (recvBuf[9]==(unsigned char)0x50)){
             recvLen = recv(socket_fd, recvBuf, 6, 0);
-            if(recvLen<6) goto EXIT;
+            if(recvLen<6) {
+                FLOGE("EncoderAudio recv data error! recvLen=%d", recvLen);
+                goto EXIT;
+            }
             continue;
         }
 
         if ((recvBuf[8]!=(unsigned char)0x04) || (recvBuf[9]!=(unsigned char)0x4B)){
-            recvLen = recv(socket_fd, recvBuf, 4096, 0);
+            recvLen = recv(socket_fd, recvBuf, 1024, 0);
             FLOGE("EncoderAudio recv other audio recvLen=%d", recvLen);
             continue;
         }
@@ -225,7 +250,7 @@ void EncoderAudio::clientSocket()
         int32_t recvSize = 0;
         while(recvSize<dataSize && !is_stop){
             recvLen = recv(socket_fd, recvData->data(), dataSize-recvSize, 0);
-            if(recvLen==(dataSize-recvSize) && !is_stop  && is_codec){
+            if(recvLen==(dataSize-recvSize) && !is_stop  && !mTerminals.empty()){
                 recvData->setRange(0, dataSize);
                 encoderPCMData(recvData, sample_fmt, sample_rate, ch_layout);
                 break;
@@ -238,6 +263,7 @@ void EncoderAudio::clientSocket()
         }
         recvLen = recv(socket_fd, recvBuf, 2, 0);
         if (recvLen < 2 || (recvBuf[0]!=(unsigned char)0x7E) || (recvBuf[1]!=(unsigned char)0x0D)){
+            FLOGE("EncoderAudio recv data error! foot error");
             goto EXIT;
         }
 	}
@@ -279,7 +305,6 @@ void EncoderAudio::clientChecked()
                 }
                 audio_clients.clear();
             }
-            codecRelease();
         }
     }
     return;
@@ -288,8 +313,6 @@ void EncoderAudio::clientChecked()
 
 void EncoderAudio::codecInit()
 {
-    if(is_codec) return;
-    
     mLooper = new ALooper;
     mLooper->setName("EncoderAudio_looper");
     mLooper->start(false);
@@ -323,14 +346,10 @@ void EncoderAudio::codecInit()
     if (err != OK) FLOGE("codec->getInputBuffers (err=%d)", err);
     err = mCodec->getOutputBuffers(&outBuffers);
     if (err != OK) FLOGE("codec->getOutputBuffers (err=%d)", err);
-    
-    is_codec = true;
 }
 
 void EncoderAudio::codecRelease()
 {
-    is_codec = false;
-    
     if(mCodec!=nullptr){
         mCodec->stop();
         mCodec->release();
@@ -343,7 +362,7 @@ void EncoderAudio::codecRelease()
     }
 }
 
-void EncoderAudio::encoderPCMData(sp<ABuffer> pcmdata,      int32_t sample_fmt, int32_t sample_rate, int64_t ch_layout)
+void EncoderAudio::encoderPCMData(sp<ABuffer> pcmdata, int32_t sample_fmt, int32_t sample_rate, int64_t ch_layout)
 {
     int32_t key = ((ch_layout<<24)&0xFF000000)+((sample_fmt<<16)&0x00FF0000)+(sample_rate&0x0000FFFF);
     int64_t ptsUsec = systemTime(SYSTEM_TIME_MONOTONIC) / 1000000;
