@@ -34,9 +34,9 @@ private:
     void onGetParameterRequest(const char* data, int32_t cseq);
     void onOtherRequest(const char* data, int32_t cseq);
 
-    void sendSPSPPS(const     char* data, int32_t size, int64_t ptsUsec);
-    void sendVFrame(const     char* data, int32_t size, int64_t ptsUsec);
-    void sendAFrame(const     char* data, int32_t size, int64_t ptsUsec);
+    void sendSPSPPS(const char* data, int32_t size, int64_t ptsUsec);
+    void sendVFrame(const char* data, int32_t size, int64_t ptsUsec);
+    void sendAFrame(const char* data, int32_t size, int64_t ptsUsec);
 
 private:
 
@@ -50,7 +50,8 @@ private:
     int32_t mSocket;
     volatile bool is_stop;
     volatile bool is_disconnect;
-    volatile bool is_play;
+    volatile bool is_playing;
+    volatile bool is_send_iframe;
     
     std::thread *send_t;
     std::mutex mlock_send;

@@ -111,6 +111,7 @@ void InputServer::serverSocket()
         std::lock_guard<std::mutex> lock (mlock_client);
         input_clients.push_back(client);
     }
+    shutdown(server_socket, SHUT_RDWR);
     close(server_socket);
     FLOGD("InputServer socketServer exit!");
 	return;

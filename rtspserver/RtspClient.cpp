@@ -22,7 +22,8 @@ RtspClient::RtspClient(RtspServer* server, ServerManager* manager, int32_t socke
 ,mSocket(socket)
 ,is_stop(false)
 ,is_disconnect(false)
-,is_play(false)
+,is_playing(false)
+,is_send_iframe(false)
 ,sequencenumber1(0)
 ,sequencenumber2(0)
 ,conn_type(RTP_TCP)
@@ -30,6 +31,8 @@ RtspClient::RtspClient(RtspServer* server, ServerManager* manager, int32_t socke
 ,mTid(0)
 {
     FLOGD("%s()", __func__);
+    //int flags = fcntl(mSocket, F_GETFL, 0);
+    //fcntl(mSocket, F_SETFL, flags | O_NONBLOCK);
     mManager->registerListener(this);
     recv_t = new std::thread(&RtspClient::recvThread, this);
 }
@@ -38,6 +41,8 @@ RtspClient::~RtspClient()
 {
     mManager->unRegisterListener(this);
     is_stop = true;
+    shutdown(mSocket, SHUT_RDWR);
+    close(mSocket);
     {
         std::lock_guard<std::mutex> lock (mlock_send);
         mcond_send.notify_all();
@@ -46,10 +51,6 @@ RtspClient::~RtspClient()
         std::lock_guard<std::mutex> lock (mlock_recv);
         mcond_recv.notify_all();
     }
-    
-    shutdown(mSocket, SHUT_RDWR);
-    close(mSocket);
-    
     recv_t->join();
     send_t->join();
     hand_t->join();
@@ -61,18 +62,23 @@ RtspClient::~RtspClient()
 
 int32_t RtspClient::notify(const char* data, int32_t size)
 {
+    if(!is_playing) return 0;
     struct NotifyData* notifyData = (struct NotifyData*)data;    
-	//int32_t len = (data[4] & 0xFF) << 24 | (data[5] & 0xFF) << 16 | (data[6] & 0xFF) << 8 | (data[7] & 0xFF);
     int32_t pts = (data[20] & 0xFF) << 24 | (data[21] & 0xFF) << 16 | (data[22] & 0xFF) << 8 | (data[23] & 0xFF);
     switch (notifyData->type){
     case TYPE_SPSPPS_DATA:
         sendSPSPPS(data+24, size-24, pts);
+        is_send_iframe = true;
         return 0;
     case TYPE_VIDEO_DATA:
-        sendVFrame(data+24, size-24, pts);
+        if(is_send_iframe) {
+            sendVFrame(data+24, size-24, pts);
+        }
         return 0;
     case TYPE_AUDIO_DATA:
-        sendAFrame(data+24, size-24, pts);
+        if(is_send_iframe) {
+            sendAFrame(data+24, size-24, pts);
+        }
         return 0;
     }
     return 0;
@@ -96,7 +102,7 @@ void RtspClient::recvThread()
                 break;
             }
         }else{
-            if(is_play){
+            if(is_playing){
                 char heartbeat_audio[sizeof(HEARTBEAT_AUDIO)];
                 memcpy(heartbeat_audio,HEARTBEAT_AUDIO,sizeof(HEARTBEAT_AUDIO));
                 memcpy(heartbeat_audio+8,&mPid,4);
@@ -119,23 +125,35 @@ void RtspClient::recvThread()
 void RtspClient::sendThread()
 {
     while (!is_stop) {
-        std::unique_lock<std::mutex> lock (mlock_send);
-    	while(!is_stop &&sendBuf.empty()) {
-    	    mcond_send.wait(lock);
+        char* sendData = nullptr;
+        int32_t sendSize = 0;
+        {
+            std::unique_lock<std::mutex> lock (mlock_send);
+    	    while(!is_stop &&sendBuf.empty()) {
+    	        mcond_send.wait(lock);
+    	    }
+    	    if(is_stop) break;
+    	    sendSize = sendBuf.size();
+    	    if(sendSize > 0){
+    	        sendData = (char *)malloc(sendSize * sizeof(char));
+    	        memcpy(sendData, (char*)&sendBuf[0], sendSize);
+    	        sendBuf.clear();
+    	    }
     	}
-        if(is_stop) break;
-    	while(!is_stop && !sendBuf.empty()){
-    	    int32_t sendLen = send(mSocket,(const char*)&sendBuf[0],sendBuf.size(), 0);
-    	    if (sendLen < 0) {
-    	        if(errno != 11 || errno != 0) {
+    	int32_t sendLen = 0;
+    	while(!is_stop && (sendLen < sendSize)){
+    	    int32_t ret = send(mSocket,(const char*)sendData+sendLen, sendSize - sendLen, 0);
+    	    if (ret <= 0) {
+    	         if(ret==0 || (!(errno==11 || errno== 0)))  {
     	            is_stop = true;
-                    FLOGE("RtspClient send error, len=[%d] errno[%d]!",sendLen, errno);
+                    FLOGE("RtspClient send error, len=[%d] errno[%d][%s]!",ret, errno, strerror(errno));
     	            break;
     	        }
     	    }else{
-                sendBuf.erase(sendBuf.begin(),sendBuf.begin()+sendLen);
+                sendLen+=ret;
     	    }
     	}
+    	if(sendData != nullptr) free(sendData);
     }
     disConnect();
 }
@@ -175,7 +193,6 @@ void RtspClient::handleData()
         memcpy(temp, &sendBuf[0], sendBuf.size());
         FLOGD("RtspClient will send:len=[%zu]\n%s",sendBuf.size(), temp);
         free(temp);
-        std::fill(recvBuf.begin(), recvBuf.end(), 0);
         recvBuf.clear();
     }
 }
@@ -185,7 +202,10 @@ void RtspClient::sendData(const char* data, int32_t size)
     std::lock_guard<std::mutex> lock (mlock_send);
     if (sendBuf.size() > TERMINAL_MAX_BUFFER) {
         FLOGD("NOTE::RtspClient send buffer too max, wile clean %zu size", sendBuf.size());
-    	sendBuf.clear();
+        //TODO::reset video recrod for I frame
+        //sendBuf.clear();
+        disConnect();
+        return;
     }
     sendBuf.insert(sendBuf.end(), data, data + size);
     mcond_send.notify_one();
@@ -196,17 +216,21 @@ void RtspClient::disConnect()
 {
     if(!is_disconnect){
         is_disconnect = true;
-        mServer->disconnectClient(this);
-        char video_stop[sizeof(VIDEO_STOP)];
-        memcpy(video_stop,VIDEO_STOP,sizeof(VIDEO_STOP));
-        memcpy(video_stop+8,&mPid,4);
-        memcpy(video_stop+12,&mTid,4);
-        mManager->updataSync((const char*)video_stop,sizeof(video_stop));
-        char audio_stop[sizeof(AUDIO_STOP)];
-        memcpy(audio_stop,AUDIO_STOP,sizeof(AUDIO_STOP));
-        memcpy(audio_stop+8,&mPid,4);
-        memcpy(audio_stop+12,&mTid,4);
-        mManager->updataSync((const char*)audio_stop,sizeof(audio_stop));
+        shutdown(mSocket, SHUT_RDWR);
+        close(mSocket);
+        if(is_playing){
+            mServer->disconnectClient(this);
+            char video_stop[sizeof(VIDEO_STOP)];
+            memcpy(video_stop,VIDEO_STOP,sizeof(VIDEO_STOP));
+            memcpy(video_stop+8,&mPid,4);
+            memcpy(video_stop+12,&mTid,4);
+            mManager->updataSync((const char*)video_stop,sizeof(video_stop));
+            char audio_stop[sizeof(AUDIO_STOP)];
+            memcpy(audio_stop,AUDIO_STOP,sizeof(AUDIO_STOP));
+            memcpy(audio_stop+8,&mPid,4);
+            memcpy(audio_stop+12,&mTid,4);
+            mManager->updataSync((const char*)audio_stop,sizeof(audio_stop));
+        }
     }
 }
 
@@ -233,11 +257,8 @@ void RtspClient::onOptionsRequest(const char* data, int32_t cseq)
     appendCommonResponse(&response, cseq);
     response.append("Public: OPTIONS, DESCRIBE, SETUP, TEARDOWN, PLAY, PAUSE, GET_PARAMETER, SET_PARAMETER\r\n");
     response.append("\r\n");
-    if(conn_type==RTP_TCP){
-        sendData(response.c_str(),response.size());
-    }else{
-        send(mSocket,response.c_str(),response.size(),0);
-    }
+    int32_t ret = send(mSocket,response.c_str(),response.size(),0);
+    if(ret <= 0) disConnect();
 }
 
 void RtspClient::onDescribeRequest(const char* data, int32_t cseq)
@@ -289,11 +310,8 @@ void RtspClient::onDescribeRequest(const char* data, int32_t cseq)
     response.append("Content-Type: application/sdp\r\n");
     response.append("\r\n");
     response.append(spd.c_str());
-    if(conn_type==RTP_TCP){
-        sendData(response.c_str(),response.size());
-    }else{
-        send(mSocket,response.c_str(),response.size(),0);
-    }
+    int32_t ret = send(mSocket,response.c_str(),response.size(),0);
+    if(ret <= 0) disConnect();
 }
 
 void RtspClient::onSetupRequest(const char* data, int32_t cseq)
@@ -331,11 +349,8 @@ void RtspClient::onSetupRequest(const char* data, int32_t cseq)
     sprintf(temp, "Session: %d\r\n",mSocket);
     response.append(temp);
     response.append("\r\n");
-    if(conn_type==RTP_TCP){
-        sendData(response.c_str(),response.size());
-    }else{
-        send(mSocket,response.c_str(),response.size(),0);
-    }
+    int32_t ret = send(mSocket,response.c_str(),response.size(),0);
+    if(ret <= 0) disConnect();
 }
 
 void RtspClient::onPlayRequest(const char* data, int32_t cseq)
@@ -347,11 +362,8 @@ void RtspClient::onPlayRequest(const char* data, int32_t cseq)
     sprintf(temp, "Session: %d\r\n",mSocket);
     response.append(temp);
     response.append("\r\n");
-    if(conn_type==RTP_TCP){
-        sendData(response.c_str(),response.size());
-    }else{
-        send(mSocket,response.c_str(),response.size(),0);
-    }
+    int32_t ret = send(mSocket,response.c_str(),response.size(),0);
+    if(ret <= 0) disConnect();
     {
         char video_start[sizeof(VIDEO_START)];
 	    memcpy(video_start, VIDEO_START, sizeof(VIDEO_START));
@@ -363,7 +375,7 @@ void RtspClient::onPlayRequest(const char* data, int32_t cseq)
 	    memcpy(audio_start + 8, &mPid, 4);
         memcpy(audio_start + 12, &mTid, 4);
 	    mManager->updataSync((const char*)audio_start, sizeof(audio_start));
-        is_play = true;
+        is_playing = true;
     }
 }
 
@@ -372,11 +384,8 @@ void RtspClient::onGetParameterRequest(const char* data, int32_t cseq)
     std::string response = "RTSP/1.0 200 OK\r\n";
     appendCommonResponse(&response, cseq);
     response.append("\r\n");
-    if(conn_type==RTP_TCP){
-        sendData(response.c_str(),response.size());
-    }else{
-        send(mSocket,response.c_str(),response.size(),0);
-    }
+    int32_t ret = send(mSocket,response.c_str(),response.size(),0);
+    if(ret <= 0) disConnect();
 }
 
 void RtspClient::onOtherRequest(const char* data, int32_t cseq)
@@ -384,11 +393,8 @@ void RtspClient::onOtherRequest(const char* data, int32_t cseq)
     std::string response = "RTSP/1.0 200 OK\r\n";
     appendCommonResponse(&response, cseq);
     response.append("\r\n");
-    if(conn_type==RTP_TCP){
-        sendData(response.c_str(),response.size());
-    }else{
-        send(mSocket,response.c_str(),response.size(),0);
-    }
+    int32_t ret = send(mSocket,response.c_str(),response.size(),0);
+    if(ret <= 0) disConnect();
 }
 
 void RtspClient::sendSPSPPS(const     char* sps_pps, int32_t size, int64_t ptsUsec)

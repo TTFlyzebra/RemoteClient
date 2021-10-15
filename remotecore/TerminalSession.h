@@ -21,6 +21,7 @@ private:
     void handThread();
     void timerThread();
     void sendData(const char* data, int32_t size);
+    void resetConnect();
 
 private:
     ServerManager* mManager;

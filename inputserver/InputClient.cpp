@@ -22,6 +22,10 @@ InputClient::InputClient(InputServer* server, ServerManager* manager, int32_t so
 ,is_disconnect(false)
 {
     FLOGD("%s()", __func__);
+    //int flags = fcntl(mSocket, F_GETFL, 0);
+    //fcntl(mSocket, F_SETFL, flags | O_NONBLOCK);
+    int flags = fcntl(mSocket, F_GETFL, 0);
+    fcntl(mSocket, F_SETFL, flags | O_NONBLOCK);
     mManager->registerListener(this);
     recv_t = new std::thread(&InputClient::recvThread, this);
 }
@@ -62,7 +66,7 @@ void InputClient::recvThread()
     hand_t = new std::thread(&InputClient::handleData, this);
     char tempBuf[4096];
     while(!is_stop){
-        memset(tempBuf,0,4096);
+        memset(tempBuf, 0, 4096);
         int recvLen = recv(mSocket, tempBuf, 4096, 0);
         FLOGD("InputClient recv:len=[%d], errno=[%d]\n%s", recvLen, errno, tempBuf);
         if (recvLen <= 0) {
@@ -82,23 +86,35 @@ void InputClient::recvThread()
 void InputClient::sendThread()
 {
     while (!is_stop) {
-        std::unique_lock<std::mutex> lock (mlock_send);
-    	while(!is_stop &&sendBuf.empty()) {
-    	    mcond_send.wait(lock);
+        char* sendData = nullptr;
+        int32_t sendSize = 0;
+        {
+            std::unique_lock<std::mutex> lock (mlock_send);
+    	    while(!is_stop &&sendBuf.empty()) {
+    	        mcond_send.wait(lock);
+    	    }
+    	    if(is_stop) break;
+    	    sendSize = sendBuf.size();
+    	    if(sendSize > 0){
+    	        sendData = (char *)malloc(sendSize * sizeof(char));
+    	        memcpy(sendData, (char*)&sendBuf[0], sendSize);
+    	        sendBuf.clear();
+    	    }
     	}
-        if(is_stop) break;
-    	while(!is_stop && !sendBuf.empty()){
-    	    int32_t sendLen = send(mSocket,(const char*)&sendBuf[0],sendBuf.size(), 0);
-    	    if (sendLen < 0) {
-    	        if(errno != 11 || errno != 0) {
+    	int32_t sendLen = 0;
+    	while(!is_stop && (sendLen < sendSize)){
+    	    int32_t ret = send(mSocket,(const char*)sendData+sendLen, sendSize - sendLen, 0);
+    	    if (ret <= 0) {
+    	         if(ret==0 || (!(errno==11 || errno== 0)))  {
     	            is_stop = true;
-                    FLOGE("InputClient send error, len=[%d] errno[%d]!",sendLen, errno);
+                    FLOGE("InputClient send error, len=[%d] errno[%d][%s]!",ret, errno, strerror(errno));
     	            break;
     	        }
     	    }else{
-                sendBuf.erase(sendBuf.begin(),sendBuf.begin()+sendLen);
+                sendLen+=ret;
     	    }
     	}
+    	if(sendData != nullptr) free(sendData);
     }
     disConnect();
 }
@@ -137,7 +153,9 @@ void InputClient::sendData(const char* data, int32_t size)
     std::lock_guard<std::mutex> lock (mlock_send);
     if (sendBuf.size() > TERMINAL_MAX_BUFFER) {
         FLOGD("NOTE::InputClient send buffer too max, wile clean %zu size", sendBuf.size());
-    	sendBuf.clear();
+    	//sendBuf.clear();
+    	disConnect();
+    	return;
     }
     sendBuf.insert(sendBuf.end(), data, data + size);
     mcond_send.notify_one();

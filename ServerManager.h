@@ -34,9 +34,6 @@ public:
     void updataSync(const char* data, int32_t size);
     void updataAsync(const char* data, int32_t size);
 
-public:
-    std::mutex mlock_up;
-
 private:
     void handleData();
 
