@@ -30,11 +30,6 @@ RtspServer::~RtspServer()
 {
     mManager->unRegisterListener(this);
     is_stop = true;
-    {
-        std::lock_guard<std::mutex> lock (mlock_remove);
-        mcond_remove.notify_all();
-    }
-
     shutdown(rtp_socket, SHUT_RDWR);
     close(rtp_socket);
     shutdown(rtcp_socket, SHUT_RDWR);
@@ -42,13 +37,16 @@ RtspServer::~RtspServer()
     shutdown(server_socket, SHUT_RDWR);
     close(server_socket);
     {
+        std::lock_guard<std::mutex> lock (mlock_remove);
+        mcond_remove.notify_all();
+    }
+    {
         std::lock_guard<std::mutex> lock (mlock_client);
         for (std::list<RtspClient*>::iterator it = rtsp_clients.begin(); it != rtsp_clients.end(); ++it) {
             delete ((RtspClient*)*it);
         }
         rtsp_clients.clear();
     }
-    
     server_t->join();
     rtpudp_t->join();
     rtcpudp_t->join();
@@ -75,41 +73,59 @@ int32_t RtspServer::notify(const char* data, int32_t size)
 
 void RtspServer::serverSocket()
 {
-	FLOGD("RtspServer serverSocket start!");
-    server_socket = socket(AF_INET, SOCK_STREAM, 0);
-    if (server_socket < 0) {
-        FLOGE("serverSocket socket error %s errno: %d", strerror(errno), errno);
-        return;
-    }
-    
-    struct sockaddr_in t_sockaddr;
-    memset(&t_sockaddr, 0, sizeof(t_sockaddr));
-    t_sockaddr.sin_family = AF_INET;
-    t_sockaddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    t_sockaddr.sin_port = htons(RTSP_SERVER_TCP_PORT);
-    int32_t ret = bind(server_socket,(struct sockaddr *) &t_sockaddr,sizeof(t_sockaddr));
-    if (ret < 0) {
-        FLOGE( "serverSocket bind %d socket error %s errno: %d", RTSP_SERVER_TCP_PORT,strerror(errno), errno);
-        return;
-    }
-    ret = listen(server_socket, 5);
-    if (ret < 0) {
-        FLOGE("serverSocket listen error %s errno: %d", strerror(errno), errno);
-        return;
-    }
-    while(!is_stop) {
-        int32_t client_socket = accept(server_socket, (struct sockaddr*)NULL, NULL);
-        if(client_socket < 0) {
-            FLOGE("accpet socket error: %s errno :%d", strerror(errno), errno);
+	while(!is_stop){
+	    FLOGD("RtspServer serverSocket start!");
+        server_socket = socket(AF_INET, SOCK_STREAM, 0);
+        if (server_socket < 0) {
+            FLOGE("serverSocket socket error %s errno: %d", strerror(errno), errno);
+            for(int i=0;i<100;i++){
+                usleep(100000);
+                if(is_stop) return;
+            }
             continue;
         }
-        if(is_stop) break;
-        RtspClient *client = new RtspClient(this, mManager, client_socket);
-        std::lock_guard<std::mutex> lock (mlock_client);
-        rtsp_clients.push_back(client);
+        struct sockaddr_in t_sockaddr;
+        memset(&t_sockaddr, 0, sizeof(t_sockaddr));
+        t_sockaddr.sin_family = AF_INET;
+        t_sockaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+        t_sockaddr.sin_port = htons(RTSP_SERVER_TCP_PORT);
+        int32_t ret = bind(server_socket,(struct sockaddr *) &t_sockaddr,sizeof(t_sockaddr));
+        if (ret < 0) {
+            FLOGE( "serverSocket bind %d socket error %s errno: %d", RTSP_SERVER_TCP_PORT,strerror(errno), errno);
+            shutdown(server_socket, SHUT_RDWR);
+            close(server_socket);
+            for(int i=0;i<100;i++){
+                usleep(100000);
+                if(is_stop) return;
+            }
+            continue;
+        }
+        ret = listen(server_socket, 5);
+        if (ret < 0) {
+            FLOGE("serverSocket listen error %s errno: %d", strerror(errno), errno);
+            shutdown(server_socket, SHUT_RDWR);
+            close(server_socket);
+            for(int i=0;i<100;i++){
+                usleep(100000);
+                if(is_stop) return;
+            }
+            continue;
+        }
+        while(!is_stop) {
+            int32_t client_socket = accept(server_socket, (struct sockaddr*)NULL, NULL);
+            if(client_socket < 0) {
+                FLOGE("accpet socket error: %s errno :%d", strerror(errno), errno);
+                continue;
+            }
+            if(is_stop) break;
+            RtspClient *client = new RtspClient(this, mManager, client_socket);
+            std::lock_guard<std::mutex> lock (mlock_client);
+            rtsp_clients.push_back(client);
+        }
+        shutdown(server_socket, SHUT_RDWR);
+        close(server_socket);
+        FLOGD("RtspServer serverSocket exit!");
     }
-    close(server_socket);
-    FLOGD("RtspServer serverSocket exit!");
 }
 
 void RtspServer::rtpudpSocket()
@@ -120,36 +136,48 @@ void RtspServer::rtpudpSocket()
     int32_t addr_len;
     int32_t recvLen;
     struct sockaddr_in addr_in;
-    
-    rtp_socket = socket(AF_INET, SOCK_DGRAM, 0);
-    if(rtp_socket < 0) {
-       FLOGE("RTCP udp socket error %s errno: %d", strerror(errno), errno);
-       return;
-    }
-    memset(&addr_in, 0, sizeof(struct sockaddr_in));//每个字节都用0填充
-    addr_in.sin_family = AF_INET;//使用IPV4地址
-    addr_in.sin_port = htons(RTSP_SERVER_UDP_PORT1);//端口
-    addr_in.sin_addr.s_addr = htonl(INADDR_ANY);//自动获取IP地址
-    int32_t ret = bind(rtp_socket, (struct sockaddr *)&addr_in, sizeof(addr_in));
-    if(ret < 0){
-        FLOGE( "bind RTCP udp socket error %s errno: %d", strerror(errno), errno);
-        return;
-    }
+
     while(!is_stop){
-        int32_t recvLen = recvfrom(rtp_socket, recvBuf, 1024, 0, (struct sockaddr *)&addr_in, (socklen_t *)&addr_len);
-        if(recvLen > 0){
-            memset(temp,0, 4096);
-            for (int32_t i = 0; i < recvLen; i++) {
-                sprintf(temp, "%s%02x:", temp, recvBuf[i]);
-            }
-            //FLOGV("rtp_recv:len=[%d],errno=[%d]\n%s", recvLen, errno, temp);
-        }else{
-            FLOGE("rtp_recv:len=[%d],errno=[%d].", recvLen, errno);
+        rtp_socket = socket(AF_INET, SOCK_DGRAM, 0);
+        if(rtp_socket < 0) {
+           FLOGE("RTCP udp socket error %s errno: %d", strerror(errno), errno);
+           for(int i=0;i<100;i++){
+               usleep(100000);
+               if(is_stop) return;
+           }
+           continue;
         }
+        memset(&addr_in, 0, sizeof(struct sockaddr_in));//每个字节都用0填充
+        addr_in.sin_family = AF_INET;//使用IPV4地址
+        addr_in.sin_port = htons(RTSP_SERVER_UDP_PORT1);//端口
+        addr_in.sin_addr.s_addr = htonl(INADDR_ANY);//自动获取IP地址
+        int32_t ret = bind(rtp_socket, (struct sockaddr *)&addr_in, sizeof(addr_in));
+        if(ret < 0){
+            FLOGE( "bind RTCP udp socket error %s errno: %d", strerror(errno), errno);
+            shutdown(rtp_socket, SHUT_RDWR);
+            close(rtp_socket);
+            for(int i=0;i<100;i++){
+                usleep(100000);
+                if(is_stop) return;
+            }
+            continue;
+        }
+        while(!is_stop){
+            int32_t recvLen = recvfrom(rtp_socket, recvBuf, 1024, 0, (struct sockaddr *)&addr_in, (socklen_t *)&addr_len);
+            if(recvLen > 0){
+                memset(temp,0, 4096);
+                for (int32_t i = 0; i < recvLen; i++) {
+                    sprintf(temp, "%s%02x:", temp, recvBuf[i]);
+                }
+                //FLOGV("rtp_recv:len=[%d],errno=[%d]\n%s", recvLen, errno, temp);
+            }else{
+                FLOGE("rtp_recv:len=[%d],errno=[%d].", recvLen, errno);
+            }
+        }
+        shutdown(rtp_socket, SHUT_RDWR);
+        close(rtp_socket);
+        FLOGD("RtspServer rtpudpSocket exit!");
     }
-    close(rtp_socket);
-    FLOGD("RtspServer rtpudpSocket exit!");
-    return;
 }
 
 void RtspServer::rtcpudpSocket()
@@ -160,36 +188,48 @@ void RtspServer::rtcpudpSocket()
     int32_t addr_len;
     int32_t recvLen;
     struct sockaddr_in addr_in;
-    
-    rtcp_socket = socket(AF_INET, SOCK_DGRAM, 0);
-    if(rtcp_socket < 0) {
-        FLOGE("RTP udp socket error %s errno: %d", strerror(errno), errno);
-        return;
-    }
-    memset(&addr_in, 0, sizeof(struct sockaddr_in));//每个字节都用0填充
-    addr_in.sin_family = AF_INET;//使用IPV4地址
-    addr_in.sin_port = htons(RTSP_SERVER_UDP_PORT2);//端口
-    addr_in.sin_addr.s_addr = htonl(INADDR_ANY);//自动获取IP地址
-    int32_t ret = bind(rtcp_socket, (struct sockaddr *)&addr_in, sizeof(addr_in));
-    if(ret < 0){
-        FLOGE( "bind RTP udp socket error %s errno: %d", strerror(errno), errno);
-        return;
-    }
+
     while(!is_stop){
-        int32_t recvLen = recvfrom(rtcp_socket, recvBuf, 1024, 0, (struct sockaddr *)&addr_in, (socklen_t *)&addr_len);
-        if(recvLen > 0){
-            memset(temp,0, 4096);
-            for (int32_t i = 0; i < recvLen; i++) {
-                sprintf(temp, "%s%02x:", temp, recvBuf[i]);
+        rtcp_socket = socket(AF_INET, SOCK_DGRAM, 0);
+        if(rtcp_socket < 0) {
+            FLOGE("RTP udp socket error %s errno: %d", strerror(errno), errno);
+            for(int i=0;i<100;i++){
+               usleep(100000);
+               if(is_stop) return;
             }
-            //FLOGV("rtcp_recv:len=[%d],errno=[%d]\n%s", recvLen, errno, temp);
-        }else{
-            FLOGE("rtcp_recv:len=[%d],errno=[%d].", recvLen, errno);
+            continue;
         }
+        memset(&addr_in, 0, sizeof(struct sockaddr_in));//每个字节都用0填充
+        addr_in.sin_family = AF_INET;//使用IPV4地址
+        addr_in.sin_port = htons(RTSP_SERVER_UDP_PORT2);//端口
+        addr_in.sin_addr.s_addr = htonl(INADDR_ANY);//自动获取IP地址
+        int32_t ret = bind(rtcp_socket, (struct sockaddr *)&addr_in, sizeof(addr_in));
+        if(ret < 0){
+            FLOGE( "bind RTP udp socket error %s errno: %d", strerror(errno), errno);
+            shutdown(rtcp_socket, SHUT_RDWR);
+            close(rtcp_socket);
+            for(int i=0;i<100;i++){
+                usleep(100000);
+                if(is_stop) return;
+            }
+            continue;
+        }
+        while(!is_stop){
+            int32_t recvLen = recvfrom(rtcp_socket, recvBuf, 1024, 0, (struct sockaddr *)&addr_in, (socklen_t *)&addr_len);
+            if(recvLen > 0){
+                memset(temp,0, 4096);
+                for (int32_t i = 0; i < recvLen; i++) {
+                    sprintf(temp, "%s%02x:", temp, recvBuf[i]);
+                }
+                //FLOGV("rtcp_recv:len=[%d],errno=[%d]\n%s", recvLen, errno, temp);
+            }else{
+                FLOGE("rtcp_recv:len=[%d],errno=[%d].", recvLen, errno);
+            }
+        }
+        shutdown(rtcp_socket, SHUT_RDWR);
+        close(rtcp_socket);
+        FLOGD("RtspServer rtcpudpSocket exit!");
     }
-    close(rtcp_socket);
-    FLOGD("RtspServer rtcpudpSocket exit!");
-    return;
 }
 
 void RtspServer::removeClient()

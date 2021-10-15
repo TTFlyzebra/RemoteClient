@@ -20,6 +20,7 @@ EncoderAudio::EncoderAudio(ServerManager* manager)
 :mManager(manager)
 ,is_stop(false)
 ,out_buf((uint8_t *)av_malloc(OUT_SAMPLE_RATE))
+,client_t(nullptr)
 ,sequencenumber(0)
 {
     FLOGD("%s()", __func__);
@@ -60,6 +61,9 @@ EncoderAudio::~EncoderAudio()
     check_t->join();
     delete server_t;
     delete check_t;
+    if(client_t!=nullptr){
+        client_t->join();
+    }
     FLOGD("%s()", __func__);
 }
 
@@ -68,6 +72,19 @@ int32_t EncoderAudio::notify(const char* data, int32_t size)
     struct NotifyData* notifyData = (struct NotifyData*)data;
     switch (notifyData->type){
     case TYPE_AUDIO_START:
+        {
+            lastHeartBeat = systemTime(CLOCK_MONOTONIC);
+            std::lock_guard<std::mutex> lock (mlock_work);
+            std::map<int64_t, int64_t>::iterator it = mTerminals.find((int64_t)notifyData->data);
+            if(it != mTerminals.end()){
+                it->second = lastHeartBeat;
+            }else{
+                mTerminals.emplace((int64_t)notifyData->data,lastHeartBeat);
+                mcond_work.notify_one();
+            }
+            FLOGD("EncoderAudio recv start mTerminals.size=%zu", mTerminals.size());
+        }
+        return 1;
     case TYPE_HEARTBEAT_AUDIO:
         {
             lastHeartBeat = systemTime(CLOCK_MONOTONIC);
@@ -85,6 +102,7 @@ int32_t EncoderAudio::notify(const char* data, int32_t size)
         {
             std::lock_guard<std::mutex> lock (mlock_work);
             mTerminals.erase((int64_t)notifyData->data);
+            FLOGD("EncoderAudio recv stop mTerminals.size=%zu", mTerminals.size());
         }
         return 1;
     }
@@ -114,10 +132,10 @@ void EncoderAudio::serverSocket()
     	if(temp[0]<'0' || temp[0] > '9'){
     	    server_socket = socket_local_server(temp, ANDROID_SOCKET_NAMESPACE_ABSTRACT, SOCK_STREAM);
     	    if (server_socket < 0) {
+    	       shutdown(server_socket, SHUT_RDWR);
     	       close(server_socket);
     	       FLOGE("EncoderAudio localsocket server error %s errno: %d", strerror(errno), errno);
-    	       usleep(2000000);
-    	       exit(1);
+    	       usleep(5000000);
     	       continue;
     	    }
     	} else {
@@ -128,21 +146,24 @@ void EncoderAudio::serverSocket()
             t_sockaddr.sin_port = htons(AUDIO_SERVER_TCP_PORT);
             server_socket = socket(AF_INET, SOCK_STREAM, 0);
             if (server_socket < 0) {
-                close(server_socket);
                 FLOGE("EncoderAudio socket server error %s errno: %d", strerror(errno), errno);
-                usleep(2000000);
-                exit(1);
+                shutdown(server_socket, SHUT_RDWR);
+                close(server_socket);
+                usleep(5000000);
                 continue;;
             }
             ret = bind(server_socket,(struct sockaddr *) &t_sockaddr,sizeof(t_sockaddr));
             if (ret < 0) {
+                shutdown(server_socket, SHUT_RDWR);
                 close(server_socket);
                 FLOGE( "EncoderAudio bind %d socket error %s errno: %d", AUDIO_SERVER_TCP_PORT, strerror(errno), errno);
+                usleep(5000000);
                 continue;;
             }
         }
         ret = listen(server_socket, 1);
         if (ret < 0) {
+            shutdown(server_socket, SHUT_RDWR);
             close(server_socket);
             FLOGE("EncoderAudio listen error %s errno: %d", strerror(errno), errno);
             continue;;
@@ -150,8 +171,10 @@ void EncoderAudio::serverSocket()
         while(!is_stop && !mTerminals.empty()){
             int32_t client_socket = accept(server_socket, (struct sockaddr*)NULL, NULL);
             if(client_socket < 0) {
+                shutdown(server_socket, SHUT_RDWR);
                 close(client_socket);
                 FLOGE("EncoderAudio accpet socket error: %s errno :%d", strerror(errno), errno);
+                usleep(1000000);
                 continue;
             }
             if(is_stop) return;
@@ -160,13 +183,14 @@ void EncoderAudio::serverSocket()
                 std::lock_guard<std::mutex> lock (mlock_temp);
                 temp_clients.push_back(client_socket);
             }
+            if(client_t!=nullptr) client_t->join();
             client_t = new std::thread(&EncoderAudio::clientSocket, this);
-            client_t->detach();
             {
                 std::lock_guard<std::mutex> lock (mlock_client);
                 audio_clients.push_back(client_socket);
             }
         }
+        shutdown(server_socket, SHUT_RDWR);
         close(server_socket);
     }
     codecRelease();
@@ -273,7 +297,6 @@ void EncoderAudio::clientSocket()
 	}
 EXIT:
     clientExit(socket_fd);
-    close(socket_fd);
 	FLOGD("EncoderAudio clientSocket exit!");
 	return;
 }
@@ -292,6 +315,7 @@ void EncoderAudio::clientChecked()
                 int32_t lastTime = ((systemTime(SYSTEM_TIME_MONOTONIC) - it->second)/1000000)&0xFFFFFFFF;
                 if(lastTime > 60000){
                     it = mTerminals.erase(it);
+                    FLOGD("EncoderAudio timeout to remove client! size=%zu", mTerminals.size());
                 }else{
                     it++;
                 }
@@ -463,7 +487,6 @@ void EncoderAudio::encoderPCMData(sp<ABuffer> pcmdata, int32_t sample_fmt, int32
                     adata[21] = (ptsUsec & 0xFF0000) >> 16;
                     adata[22] = (ptsUsec & 0xFF00) >> 8;
                     adata[23] =  ptsUsec & 0xFF;
-                    std::lock_guard<std::mutex> lock (mManager->mlock_up);
                     mManager->updataAsync(adata, sizeof(adata));
                 }
                 err = mCodec->releaseOutputBuffer(outIndex);
@@ -484,10 +507,12 @@ void EncoderAudio::encoderPCMData(sp<ABuffer> pcmdata, int32_t sample_fmt, int32
 
 void EncoderAudio::clientExit(int32_t socket_fd)
 {
+    shutdown(server_socket, SHUT_RDWR);
+    close(socket_fd);
     if(is_stop) return;
     std::lock_guard<std::mutex> lock (mlock_client);
     audio_clients.remove(socket_fd);
-    FLOGD("EncoderAudio audio client size=[%zu].", audio_clients.size());
+    FLOGD("EncoderAudio client exit, client size=[%zu].", audio_clients.size());
 }
 
 

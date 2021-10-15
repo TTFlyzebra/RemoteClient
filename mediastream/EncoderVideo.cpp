@@ -97,7 +97,7 @@ void EncoderVideo::onMessageReceived(const sp<AMessage> &msg)
                     sequencenumber++;
                     sp<ABuffer> data;
                     CHECK(msg->findBuffer("data", &data));
-                    char spspps[sizeof(SPSPPS_DATA)];
+                    char spspps[sizeof(SPSPPS_DATA) + data->capacity()];
                     memcpy(spspps,SPSPPS_DATA,sizeof(SPSPPS_DATA));
                     int32_t size = data->capacity()+16;
                     spspps[4] = (size & 0xFF000000) >> 24;
@@ -109,9 +109,8 @@ void EncoderVideo::onMessageReceived(const sp<AMessage> &msg)
                     spspps[17] = (sequencenumber & 0xFF0000) >> 16;
                     spspps[18] = (sequencenumber & 0xFF00) >> 8;
                     spspps[19] =  sequencenumber & 0xFF;
-                    std::lock_guard<std::mutex> lock (mManager->mlock_up);
+                    memcpy(spspps + sizeof(SPSPPS_DATA),data->data(),data->capacity());
                     mManager->updataAsync(spspps, sizeof(spspps));
-                    mManager->updataAsync((const char *)data->data(), data->capacity());
                 }
                     break;
                 case kWhatVideoFrameData:
@@ -121,7 +120,7 @@ void EncoderVideo::onMessageReceived(const sp<AMessage> &msg)
                     CHECK(msg->findBuffer("data", &data));
                     int64_t ptsUsec;
                     CHECK(msg->findInt64("ptsUsec", &ptsUsec));
-                    char vdata[sizeof(VIDEO_DATA)];
+                    char vdata[sizeof(VIDEO_DATA) + data->capacity()];
                     memcpy(vdata,VIDEO_DATA,sizeof(VIDEO_DATA));
                     int32_t size = data->capacity()+16;
                     vdata[4] = (size & 0xFF000000) >> 24;
@@ -137,9 +136,8 @@ void EncoderVideo::onMessageReceived(const sp<AMessage> &msg)
                     vdata[21] = (ptsUsec & 0xFF0000) >> 16;
                     vdata[22] = (ptsUsec & 0xFF00) >> 8;
                     vdata[23] =  ptsUsec & 0xFF;
-                    std::lock_guard<std::mutex> lock (mManager->mlock_up);
+                    memcpy(vdata+sizeof(VIDEO_DATA), data->data(), data->capacity());
                     mManager->updataAsync(vdata, sizeof(vdata));
-                    mManager->updataAsync((const char *)data->data(), data->capacity());
                 }
                     break;
             }
