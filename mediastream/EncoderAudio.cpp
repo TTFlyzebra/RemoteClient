@@ -177,11 +177,11 @@ void EncoderAudio::serverSocket()
         while(!is_stop && !mUsers.empty()){
             int32_t client_socket = accept(server_socket, (struct sockaddr*)NULL, NULL);
             if(client_socket < 0) {
-                shutdown(server_socket, SHUT_RDWR);
-                close(client_socket);
+                //shutdown(server_socket, SHUT_RDWR);
+                //close(client_socket);
                 FLOGE("EncoderAudio accpet socket error: %s errno :%d", strerror(errno), errno);
                 usleep(1000000);
-                continue;
+                break;
             }
             if(is_stop) return;
             if(mUsers.empty()) break;
