@@ -34,7 +34,7 @@ private:
     int32_t sequencenumber;
 
     std::mutex mlock_work;
-    std::map<int64_t, int64_t> mTerminals;
+    std::map<int64_t, int64_t> mUsers;
     std::condition_variable mcond_work;
     int64_t lastHeartBeat;
 

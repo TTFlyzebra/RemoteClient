@@ -31,7 +31,4 @@
 #define AUDIO_PROP_IP                      "persist.sys.audio.serverip"
 #define AUDIO_PROP_PROT                    "persist.sys.audio.serverport"
 
-
-
-
 #endif //ANDROID_CONFIG_H

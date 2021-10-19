@@ -74,37 +74,43 @@ int32_t EncoderAudio::notify(const char* data, int32_t size)
     case TYPE_AUDIO_START:
         {
             lastHeartBeat = systemTime(CLOCK_MONOTONIC);
+            int64_t uid;
+            memcpy(&uid, data+16, 8);
             std::lock_guard<std::mutex> lock (mlock_work);
-            std::map<int64_t, int64_t>::iterator it = mTerminals.find((int64_t)notifyData->data);
-            if(it != mTerminals.end()){
+            std::map<int64_t, int64_t>::iterator it = mUsers.find(uid);
+            if(it != mUsers.end()){
                 it->second = lastHeartBeat;
             }else{
-                mTerminals.emplace((int64_t)notifyData->data,lastHeartBeat);
+                mUsers.emplace(uid,lastHeartBeat);
                 mcond_work.notify_one();
             }
-            FLOGD("EncoderAudio recv start mTerminals.size=%zu", mTerminals.size());
+            FLOGD("EncoderAudio recv start mUsers.size=%zu", mUsers.size());
         }
-        return 1;
+        return 0;
     case TYPE_HEARTBEAT_AUDIO:
         {
             lastHeartBeat = systemTime(CLOCK_MONOTONIC);
+            int64_t uid;
+            memcpy(&uid, data+16, 8);
             std::lock_guard<std::mutex> lock (mlock_work);
-            std::map<int64_t, int64_t>::iterator it = mTerminals.find((int64_t)notifyData->data);
-            if(it != mTerminals.end()){
+            std::map<int64_t, int64_t>::iterator it = mUsers.find(uid);
+            if(it != mUsers.end()){
                 it->second = lastHeartBeat;
             }else{
-                mTerminals.emplace((int64_t)notifyData->data,lastHeartBeat);
+                mUsers.emplace(uid,lastHeartBeat);
                 mcond_work.notify_one();
             }
         }
-        return 1;
+        return 0;
     case TYPE_AUDIO_STOP:
         {
+            int64_t uid;
+            memcpy(&uid, data+16, 8);
             std::lock_guard<std::mutex> lock (mlock_work);
-            mTerminals.erase((int64_t)notifyData->data);
-            FLOGD("EncoderAudio recv stop mTerminals.size=%zu", mTerminals.size());
+            mUsers.erase(uid);
+            FLOGD("EncoderAudio recv stop mUsers.size=%zu", mUsers.size());
         }
-        return 1;
+        return 0;
     }
     return 0;
 }
@@ -121,7 +127,7 @@ void EncoderAudio::serverSocket()
     while(!is_stop) {
         {
             std::unique_lock<std::mutex> lock (mlock_work);
-    	    while(!is_stop && mTerminals.empty()) {
+    	    while(!is_stop && mUsers.empty()) {
     	        mcond_work.wait(lock);
     	    }
         }
@@ -168,7 +174,7 @@ void EncoderAudio::serverSocket()
             FLOGE("EncoderAudio listen error %s errno: %d", strerror(errno), errno);
             continue;;
         }
-        while(!is_stop && !mTerminals.empty()){
+        while(!is_stop && !mUsers.empty()){
             int32_t client_socket = accept(server_socket, (struct sockaddr*)NULL, NULL);
             if(client_socket < 0) {
                 shutdown(server_socket, SHUT_RDWR);
@@ -178,7 +184,7 @@ void EncoderAudio::serverSocket()
                 continue;
             }
             if(is_stop) return;
-            if(mTerminals.empty()) break;
+            if(mUsers.empty()) break;
             {
                 std::lock_guard<std::mutex> lock (mlock_temp);
                 temp_clients.push_back(client_socket);
@@ -211,7 +217,7 @@ void EncoderAudio::clientSocket()
     int32_t recvLen;
     bool is_firstclean = false;
 	while(!is_stop){
-	    if( is_stop || mTerminals.empty()){
+	    if( is_stop || mUsers.empty()){
 	        recvLen = recv(socket_fd, recvBuf, 1024, 0);
 	        continue;
 	    }
@@ -278,7 +284,7 @@ void EncoderAudio::clientSocket()
         int32_t recvSize = 0;
         while(recvSize<dataSize && !is_stop){
             recvLen = recv(socket_fd, recvData->data(), dataSize-recvSize, 0);
-            if(recvLen==(dataSize-recvSize) && !is_stop  && !mTerminals.empty()){
+            if(recvLen==(dataSize-recvSize) && !is_stop  && !mUsers.empty()){
                 recvData->setRange(0, dataSize);
                 encoderPCMData(recvData, sample_fmt, sample_rate, ch_layout);
                 break;
@@ -310,18 +316,18 @@ void EncoderAudio::clientChecked()
         }
         {
             std::lock_guard<std::mutex> lock (mlock_work);
-            std::map<int64_t, int64_t>::iterator it = mTerminals.begin();
-            while(it != mTerminals.end()){
+            std::map<int64_t, int64_t>::iterator it = mUsers.begin();
+            while(it != mUsers.end()){
                 int32_t lastTime = ((systemTime(SYSTEM_TIME_MONOTONIC) - it->second)/1000000)&0xFFFFFFFF;
                 if(lastTime > 60000){
-                    it = mTerminals.erase(it);
-                    FLOGD("EncoderAudio timeout to remove client! size=%zu", mTerminals.size());
+                    it = mUsers.erase(it);
+                    FLOGD("EncoderAudio timeout to remove client! size=%zu", mUsers.size());
                 }else{
                     it++;
                 }
             }
         }
-        if(mTerminals.empty()){
+        if(mUsers.empty()){
             shutdown(server_socket, SHUT_RDWR);
             close(server_socket);
             {

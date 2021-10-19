@@ -49,37 +49,43 @@ int32_t EncoderVideo::notify(const char* data, int32_t size)
         is_re_record = true;
         {
             lastHeartBeat = systemTime(CLOCK_MONOTONIC);
+            int64_t uid;
+            memcpy(&uid, data+16, 8);
             std::lock_guard<std::mutex> lock (mlock_work);
-            std::map<int64_t, int64_t>::iterator it = mTerminals.find((int64_t)notifyData->data);
-            if(it != mTerminals.end()){
+            std::map<int64_t, int64_t>::iterator it = mUsers.find(uid);
+            if(it != mUsers.end()){
                 it->second = lastHeartBeat;
             }else{
-                mTerminals.emplace((int64_t)notifyData->data,lastHeartBeat);
+                mUsers.emplace(uid,lastHeartBeat);
                 mcond_work.notify_one();
             }
-            FLOGD("EncoderVideo recv start mTerminals.size=%zu", mTerminals.size());
+            FLOGD("EncoderVideo recv start mUsers.size=%zu", mUsers.size());
         }
-        return 1;
+        return 0;
     case TYPE_HEARTBEAT_VIDEO:
         {
             lastHeartBeat = systemTime(CLOCK_MONOTONIC);
+            int64_t uid;
+            memcpy(&uid, data+16, 8);
             std::lock_guard<std::mutex> lock (mlock_work);
-            std::map<int64_t, int64_t>::iterator it = mTerminals.find((int64_t)notifyData->data);
-            if(it != mTerminals.end()){
+            std::map<int64_t, int64_t>::iterator it = mUsers.find(uid);
+            if(it != mUsers.end()){
                 it->second = lastHeartBeat;
             }else{
-                mTerminals.emplace((int64_t)notifyData->data,lastHeartBeat);
+                mUsers.emplace(uid,lastHeartBeat);
                 mcond_work.notify_one();
             }
         }
-        return 1;
+        return 0;
     case TYPE_VIDEO_STOP:
         {
+            int64_t uid;
+            memcpy(&uid, data+16, 8);
             std::lock_guard<std::mutex> lock (mlock_work);
-            mTerminals.erase((int64_t)notifyData->data);
-            FLOGD("EncoderVideo recv stop mTerminals.size=%zu", mTerminals.size());
+            mUsers.erase(uid);
+            FLOGD("EncoderVideo recv stop mUsers.size=%zu", mUsers.size());
         }
-        return 1;
+        return 0;
     }
     return 0;
 }
@@ -155,7 +161,7 @@ void EncoderVideo::loopStart()
     while(!is_stop){
         {
             std::unique_lock<std::mutex> lock (mlock_work);
-            while(!is_stop && mTerminals.empty()) {
+            while(!is_stop && mUsers.empty()) {
                 mcond_work.wait(lock);
             }
         }
@@ -180,18 +186,18 @@ void EncoderVideo::clientChecked()
         }
         {
             std::lock_guard<std::mutex> lock (mlock_work);
-            std::map<int64_t, int64_t>::iterator it = mTerminals.begin();
-            while(it != mTerminals.end()){
+            std::map<int64_t, int64_t>::iterator it = mUsers.begin();
+            while(it != mUsers.end()){
                 int32_t time = ((systemTime(SYSTEM_TIME_MONOTONIC) - it->second)/1000000)&0xFFFFFFFF;
                 if(time > 61000){
-                    it = mTerminals.erase(it);
-                    FLOGD("EncoderVideo timeout to remove client! size=%zu", mTerminals.size());
+                    it = mUsers.erase(it);
+                    FLOGD("EncoderVideo timeout to remove client! size=%zu", mUsers.size());
                 }else{
                     it++;
                 }
             }
         }
-        if(mTerminals.empty() || is_re_record){
+        if(mUsers.empty() || is_re_record){
             screenrecord_stop();
             for(int i=0;i<30;i++){
                 if(is_stop) break;

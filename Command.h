@@ -31,6 +31,19 @@ static const unsigned char HEARTBEAT_R[16] = {
 static const int16_t TYPE_HEARTBEAT_R = 0x0201;
 
 //r-->t
+//remote connect heartbeat check
+//2byte	header EEAA
+//2byte	0102
+//4byte	data length
+//8byte	UID
+//......TID LIST
+static const unsigned char TERMINAL_LIST[16] = {
+	0xEE,0xAA,0x01,0x03,0x00,0x00,0x00,0x08,
+	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00
+};
+static const int16_t TYPE_TERMINAL_LIST = 0x0301;
+
+//r-->t
 //start video data
 //2byte	header EEAA
 //2byte	0201
@@ -53,8 +66,8 @@ static const int16_t TYPE_VIDEO_START = 0x0102;
 //2byte	header EEAA
 //2byte	0202
 //4byte	data length
-//8byte UID
 //8byte TID
+//8byte UID
 static const unsigned char VIDEO_STOP[24] = {
 	0xEE,0xAA,0x02,0x02,0x00,0x00,0x00,0x10,
 	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
@@ -67,8 +80,8 @@ static const int16_t TYPE_VIDEO_STOP = 0x0202;
 //2byte	header EEAA
 //2byte	0203
 //4byte	data length
-//8byte UID
 //8byte TID
+//8byte UID
 //2byte sample_rate
 //2byte changle
 //4byte bitrate/kbits
@@ -85,8 +98,8 @@ static const int16_t TYPE_AUDIO_START = 0x0302;
 //2byte	header EEAA
 //2byte	0204
 //4byte	data length
-//8byte UID
 //8byte TID
+//8byte UID
 static const unsigned char AUDIO_STOP[24] = {
 	0xEE,0xAA,0x02,0x04,0x00,0x00,0x00,0x10,
 	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
@@ -144,8 +157,8 @@ static const int16_t TYPE_SPSPPS_DATA = 0x1302;
 //2byte	header EEAA
 //2byte	0214
 //4byte	data length
-//8byte UID
 //8byte TID
+//8byte UID
 static const unsigned char HEARTBEAT_VIDEO[24] = {
 	0xEE,0xAA,0x02,0x14,0x00,0x00,0x00,0x10,
 	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
@@ -158,8 +171,8 @@ static const int16_t TYPE_HEARTBEAT_VIDEO = 0x1402;
 //2byte	header EEAA
 //2byte	0215
 //4byte	data length
-//8byte UID
 //8byte TID
+//8byte UID
 static const unsigned char HEARTBEAT_AUDIO[24] = {
 	0xEE,0xAA,0x02,0x15,0x00,0x00,0x00,0x10,
 	0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
