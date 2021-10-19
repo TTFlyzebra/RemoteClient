@@ -8,12 +8,12 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <fcntl.h>
+#include <utils/Timers.h>
 #include "TerminalSession.h"
 #include "Config.h"
 #include "Command.h"
 #include "Global.h"
 #include "FlyLog.h"
-
 
 TerminalSession::TerminalSession(ServerManager* manager)
 :mManager(manager)
@@ -64,11 +64,69 @@ int32_t TerminalSession::notify(const char* data, int32_t size)
     struct NotifyData* notifyData = (struct NotifyData*)data;
     switch (notifyData->type){
     case TYPE_VIDEO_DATA:
-    case TYPE_AUDIO_DATA:
     case TYPE_SPSPPS_DATA:
+        {
+            std::lock_guard<std::mutex> lock (mlock_video);
+            if(mVideoUsers.empty()) return 0;
+        }
         sendData(data, size);
         return 0;
-    default: 
+    case TYPE_AUDIO_DATA:
+        {
+            std::lock_guard<std::mutex> lock (mlock_audio);
+            if(mAudioUsers.empty()) return 0;
+        }
+        sendData(data, size);
+        return 0;
+    case TYPE_VIDEO_START:
+    case TYPE_HEARTBEAT_VIDEO:
+        {
+            lastHeartBeat = systemTime(CLOCK_MONOTONIC);
+            int64_t uid;
+            memcpy(&uid, data+16, 8);
+            std::lock_guard<std::mutex> lock (mlock_video);
+            std::map<int64_t, int64_t>::iterator it = mVideoUsers.find(uid);
+            if(it != mVideoUsers.end()){
+                it->second = lastHeartBeat;
+            }else{
+                mVideoUsers.emplace(uid, lastHeartBeat);
+            }
+        }
+        return 0;
+    case TYPE_VIDEO_STOP:
+        {
+            int64_t uid;
+            memcpy(&uid, data+16, 8);
+            std::lock_guard<std::mutex> lock (mlock_video);
+            mVideoUsers.erase(uid);
+            FLOGD("TerminalSession recv vido stop, client size=[%zu]", mVideoUsers.size());
+        }
+        return 0;
+    case TYPE_AUDIO_START:
+    case TYPE_HEARTBEAT_AUDIO:
+        {
+            lastHeartBeat = systemTime(CLOCK_MONOTONIC);
+            int64_t uid;
+            memcpy(&uid, data+16, 8);
+            std::lock_guard<std::mutex> lock (mlock_audio);
+            std::map<int64_t, int64_t>::iterator it = mAudioUsers.find(uid);
+            if(it != mAudioUsers.end()){
+                it->second = lastHeartBeat;
+            }else{
+                mAudioUsers.emplace(uid, lastHeartBeat);
+            }
+        }
+        return 0;
+    case TYPE_AUDIO_STOP:
+        {
+            int64_t uid;
+            memcpy(&uid, data+16, 8);
+            std::lock_guard<std::mutex> lock (mlock_audio);
+            mAudioUsers.erase(uid);
+            FLOGD("TerminalSession recv audio stop, client size=[%zu]", mAudioUsers.size());
+        }
+        return 0;
+    default:
         //{
         //    char temp[256] = {0};
         //    int num = size<24?size:24;
@@ -102,7 +160,7 @@ void TerminalSession::connThread()
             servaddr.sin_port = htons(TERMINAL_SERVER_TCP_PORT);
             servaddr.sin_addr.s_addr = inet_addr(REMOTEPC_SERVER_IP);
             if (connect(mSocket, (struct sockaddr *) &servaddr, sizeof(servaddr)) != 0) {
-                FLOGD("TerminalSession connect failed! %s errno :%d", strerror(errno), errno);
+                FLOGD("TerminalSession connect failed! errno[%d][%s]", errno, strerror(errno));
                 shutdown(mSocket, SHUT_RDWR);
                 close(mSocket);
                 for(int i=0;i<3000;i++){
@@ -115,6 +173,7 @@ void TerminalSession::connThread()
                     continue;
                 }
             }else{
+            	FLOGD("TerminalSession connect ok!");
                 std::lock_guard<std::mutex> lock (mlock_conn);
                 is_connect = true;
                 mcond_conn.notify_one();
@@ -225,14 +284,49 @@ void TerminalSession::sendData(const char* data, int32_t size)
 
 void TerminalSession::timerThread()
 {
+    int32_t av_count = 0;
     while(!is_stop){
+        //heart
+        for(int i=0;i<10;i++){
+            if(is_stop) break;
+            usleep(100000);
+        }
+
         char heartbeat_t[sizeof(HEARTBEAT_T)];
         memcpy(heartbeat_t,HEARTBEAT_T,sizeof(HEARTBEAT_T));
         memcpy(heartbeat_t+8,mTerminal.tid,8);
         sendData((const char*)heartbeat_t,sizeof(heartbeat_t));
-        for(int i=0;i<50;i++){
-            if(is_stop) break;
-            usleep(100000);
+
+        //check audio connect
+        if(is_stop) break;
+        if(av_count<5) continue;
+        av_count = 0;
+        {
+            std::lock_guard<std::mutex> lock (mlock_audio);
+            std::map<int64_t, int64_t>::iterator it = mAudioUsers.begin();
+            while(it != mAudioUsers.end()){
+                int32_t time = ((systemTime(SYSTEM_TIME_MONOTONIC) - it->second)/1000000)&0xFFFFFFFF;
+                if(time > 16000){
+                    it = mAudioUsers.erase(it);
+                    FLOGD("TerminalSession timeout to remove audio client! size=%zu", mAudioUsers.size());
+                }else{
+                    it++;
+                }
+            }
+        }
+        //check video connect
+        {
+            std::lock_guard<std::mutex> lock (mlock_video);
+            std::map<int64_t, int64_t>::iterator it = mVideoUsers.begin();
+            while(it != mVideoUsers.end()){
+                int32_t time = ((systemTime(SYSTEM_TIME_MONOTONIC) - it->second)/1000000)&0xFFFFFFFF;
+                if(time > 16000){
+                    it = mVideoUsers.erase(it);
+                    FLOGD("TerminalSession timeout to remove video client! size=%zu", mVideoUsers.size());
+                }else{
+                    it++;
+                }
+            }
         }
     }
 }

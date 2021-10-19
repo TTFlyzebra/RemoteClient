@@ -5,6 +5,7 @@
 #ifndef ANDROID_TERMINALSESSION_H
 #define ANDROID_TERMINALSESSION_H
 
+#include <map>
 #include "ServerManager.h"
 
 class TerminalSession : public INotify{
@@ -44,6 +45,12 @@ private:
     std::condition_variable mcond_recv;
     
     std::thread *time_t;
+
+    int64_t lastHeartBeat;
+    std::mutex mlock_video;
+    std::map<int64_t, int64_t> mVideoUsers;
+    std::mutex mlock_audio;
+    std::map<int64_t, int64_t> mAudioUsers;
 };
 
 #endif //ANDROID_TERMINALSESSION_H

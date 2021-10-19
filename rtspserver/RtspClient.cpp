@@ -105,13 +105,15 @@ void RtspClient::recvThread()
             if(is_playing){
                 char heartbeat_audio[sizeof(HEARTBEAT_AUDIO)];
                 memcpy(heartbeat_audio,HEARTBEAT_AUDIO,sizeof(HEARTBEAT_AUDIO));
-                memcpy(heartbeat_audio+8,&mPid,4);
-                memcpy(heartbeat_audio+12,&mTid,4);
+                memcpy(heartbeat_audio+8,&mTerminal,8);
+                memcpy(heartbeat_audio+16,&mPid,4);
+                memcpy(heartbeat_audio+20,&mTid,4);
                 mManager->updataSync((const char*)heartbeat_audio, sizeof(heartbeat_audio));
                 char heartbeat_video[sizeof(HEARTBEAT_VIDEO)];
                 memcpy(heartbeat_video,HEARTBEAT_VIDEO,sizeof(HEARTBEAT_VIDEO));
-                memcpy(heartbeat_video+8,&mPid,4);
-                memcpy(heartbeat_video+12,&mTid,4);
+                memcpy(heartbeat_video+8,&mTerminal,8);
+                memcpy(heartbeat_video+16,&mPid,4);
+                memcpy(heartbeat_video+20,&mTid,4);
                 mManager->updataSync((const char*)heartbeat_video, sizeof(heartbeat_video));
             }
             std::lock_guard<std::mutex> lock (mlock_recv);
@@ -222,13 +224,15 @@ void RtspClient::disConnect()
             mServer->disconnectClient(this);
             char video_stop[sizeof(VIDEO_STOP)];
             memcpy(video_stop,VIDEO_STOP,sizeof(VIDEO_STOP));
-            memcpy(video_stop+8,&mPid,4);
-            memcpy(video_stop+12,&mTid,4);
+            memcpy(video_stop+8,&mTerminal,8);
+            memcpy(video_stop+16,&mPid,4);
+            memcpy(video_stop+20,&mTid,4);
             mManager->updataSync((const char*)video_stop,sizeof(video_stop));
             char audio_stop[sizeof(AUDIO_STOP)];
             memcpy(audio_stop,AUDIO_STOP,sizeof(AUDIO_STOP));
-            memcpy(audio_stop+8,&mPid,4);
-            memcpy(audio_stop+12,&mTid,4);
+            memcpy(audio_stop+8,&mTerminal,8);
+            memcpy(audio_stop+16,&mPid,4);
+            memcpy(audio_stop+20,&mTid,4);
             mManager->updataSync((const char*)audio_stop,sizeof(audio_stop));
         }
     }
@@ -366,15 +370,17 @@ void RtspClient::onPlayRequest(const char* data, int32_t cseq)
     if(ret <= 0) disConnect();
     {
         char video_start[sizeof(VIDEO_START)];
-	    memcpy(video_start, VIDEO_START, sizeof(VIDEO_START));
-	    memcpy(video_start + 8, &mPid, 4);
-	    memcpy(video_start + 12, &mTid, 4);
-	    mManager->updataSync((const char*)video_start, sizeof(video_start));
-	    char audio_start[sizeof(AUDIO_START)];
-	    memcpy(audio_start, AUDIO_START, sizeof(AUDIO_START));
-	    memcpy(audio_start + 8, &mPid, 4);
-        memcpy(audio_start + 12, &mTid, 4);
-	    mManager->updataSync((const char*)audio_start, sizeof(audio_start));
+        memcpy(video_start, VIDEO_START, sizeof(VIDEO_START));
+        memcpy(video_start + 8,&mTerminal,8);
+        memcpy(video_start + 16, &mPid, 4);
+        memcpy(video_start + 20, &mTid, 4);
+        mManager->updataSync((const char*)video_start, sizeof(video_start));
+        char audio_start[sizeof(AUDIO_START)];
+        memcpy(audio_start, AUDIO_START, sizeof(AUDIO_START));
+        memcpy(audio_start + 8,&mTerminal,8);
+        memcpy(audio_start + 16, &mPid, 4);
+        memcpy(audio_start + 20, &mTid, 4);
+        mManager->updataSync((const char*)audio_start, sizeof(audio_start));
         is_playing = true;
     }
 }
