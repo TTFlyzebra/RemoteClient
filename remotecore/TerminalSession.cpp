@@ -78,54 +78,6 @@ int32_t TerminalSession::notify(const char* data, int32_t size)
         }
         sendData(data, size);
         return 0;
-    case TYPE_VIDEO_START:
-    case TYPE_HEARTBEAT_VIDEO:
-        {
-            lastHeartBeat = systemTime(CLOCK_MONOTONIC);
-            int64_t uid;
-            memcpy(&uid, data+16, 8);
-            std::lock_guard<std::mutex> lock (mlock_video);
-            std::map<int64_t, int64_t>::iterator it = mVideoUsers.find(uid);
-            if(it != mVideoUsers.end()){
-                it->second = lastHeartBeat;
-            }else{
-                mVideoUsers.emplace(uid, lastHeartBeat);
-            }
-        }
-        return 0;
-    case TYPE_VIDEO_STOP:
-        {
-            int64_t uid;
-            memcpy(&uid, data+16, 8);
-            std::lock_guard<std::mutex> lock (mlock_video);
-            mVideoUsers.erase(uid);
-            FLOGD("TerminalSession recv vido stop, client size=[%zu]", mVideoUsers.size());
-        }
-        return 0;
-    case TYPE_AUDIO_START:
-    case TYPE_HEARTBEAT_AUDIO:
-        {
-            lastHeartBeat = systemTime(CLOCK_MONOTONIC);
-            int64_t uid;
-            memcpy(&uid, data+16, 8);
-            std::lock_guard<std::mutex> lock (mlock_audio);
-            std::map<int64_t, int64_t>::iterator it = mAudioUsers.find(uid);
-            if(it != mAudioUsers.end()){
-                it->second = lastHeartBeat;
-            }else{
-                mAudioUsers.emplace(uid, lastHeartBeat);
-            }
-        }
-        return 0;
-    case TYPE_AUDIO_STOP:
-        {
-            int64_t uid;
-            memcpy(&uid, data+16, 8);
-            std::lock_guard<std::mutex> lock (mlock_audio);
-            mAudioUsers.erase(uid);
-            FLOGD("TerminalSession recv audio stop, client size=[%zu]", mAudioUsers.size());
-        }
-        return 0;
     default:
         //{
         //    char temp[256] = {0};
@@ -266,6 +218,58 @@ void TerminalSession::handThread()
             }
             if(is_stop) break;
             mManager->updataSync(&recvBuf[0], aLen);
+            const char* data = &recvBuf[0];
+            struct NotifyData* notifyData = (struct NotifyData*)&recvBuf[0];
+            switch (notifyData->type){
+            case TYPE_VIDEO_START:
+            case TYPE_HEARTBEAT_VIDEO:
+                {
+                    lastHeartBeat = systemTime(CLOCK_MONOTONIC);
+                    int64_t uid;
+                    memcpy(&uid, data+16, 8);
+                    std::lock_guard<std::mutex> lock (mlock_video);
+                    std::map<int64_t, int64_t>::iterator it = mVideoUsers.find(uid);
+                    if(it != mVideoUsers.end()){
+                        it->second = lastHeartBeat;
+                    }else{
+                        mVideoUsers.emplace(uid, lastHeartBeat);
+                    }
+                }
+                break;
+            case TYPE_VIDEO_STOP:
+                {
+                    int64_t uid;
+                    memcpy(&uid, data+16, 8);
+                    std::lock_guard<std::mutex> lock (mlock_video);
+                    mVideoUsers.erase(uid);
+                    FLOGD("TerminalSession recv video stop, client size=[%zu]", mVideoUsers.size());
+                }
+                break;
+            case TYPE_AUDIO_START:
+            case TYPE_HEARTBEAT_AUDIO:
+                {
+                    lastHeartBeat = systemTime(CLOCK_MONOTONIC);
+                    int64_t uid;
+                    memcpy(&uid, data+16, 8);
+                    std::lock_guard<std::mutex> lock (mlock_audio);
+                    std::map<int64_t, int64_t>::iterator it = mAudioUsers.find(uid);
+                    if(it != mAudioUsers.end()){
+                        it->second = lastHeartBeat;
+                    }else{
+                        mAudioUsers.emplace(uid, lastHeartBeat);
+                    }
+                }
+                break;
+            case TYPE_AUDIO_STOP:
+                {
+                    int64_t uid;
+                    memcpy(&uid, data+16, 8);
+                    std::lock_guard<std::mutex> lock (mlock_audio);
+                    mAudioUsers.erase(uid);
+                    FLOGD("TerminalSession recv audio stop, client size=[%zu]", mAudioUsers.size());
+                }
+                break;
+            }
             recvBuf.erase(recvBuf.begin(),recvBuf.begin()+aLen);
         }
     }
