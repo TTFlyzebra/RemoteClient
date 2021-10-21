@@ -134,7 +134,7 @@ void EncoderAudio::serverSocket()
         if(is_stop) return;
         int32_t ret;
     	char temp[PROPERTY_VALUE_MAX] = {0};
-    	property_get(PROP_IP, temp, SERVER_IP);
+    	property_get(AUDIO_PROP_IP, temp, AUDIO_SERVER_IP);
     	if(temp[0]<'0' || temp[0] > '9'){
     	    server_socket = socket_local_server(temp, ANDROID_SOCKET_NAMESPACE_ABSTRACT, SOCK_STREAM);
     	    if (server_socket < 0) {

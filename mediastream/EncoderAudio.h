@@ -48,11 +48,6 @@ extern "C"{
 #include <system/audio.h>
 #include "ServerManager.h"
 
-#define SERVER_IP                    "127.0.0.1"
-#define SERVER_PORT                  "18183"
-#define PROP_IP                      "persist.sys.audio.serverip"
-#define PROP_PROT                    "persist.sys.audio.serverport"
-
 namespace android {
 
 class EncoderAudio : public AHandler, public INotify {
