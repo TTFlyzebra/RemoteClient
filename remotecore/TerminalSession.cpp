@@ -112,7 +112,7 @@ void TerminalSession::connThread()
             servaddr.sin_port = htons(TERMINAL_SERVER_TCP_PORT);
             servaddr.sin_addr.s_addr = inet_addr(REMOTEPC_SERVER_IP);
             if (connect(mSocket, (struct sockaddr *) &servaddr, sizeof(servaddr)) != 0) {
-                FLOGD("TerminalSession connect failed! errno[%d][%s]", errno, strerror(errno));
+                //FLOGD("TerminalSession connect failed! errno[%d][%s]", errno, strerror(errno));
                 shutdown(mSocket, SHUT_RDWR);
                 close(mSocket);
                 for(int i=0;i<3000;i++){
