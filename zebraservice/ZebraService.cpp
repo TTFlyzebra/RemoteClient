@@ -6,7 +6,10 @@
 #include <binder/IPCThreadState.h>
 
 #include "ZebraService.h"
+#include "Command.h"
 #include "FlyLog.h"
+
+using ::android::hardware::Return;
 
 namespace android {
 
@@ -21,24 +24,43 @@ ZebraService::ZebraService(ServerManager* manager)
 {
     FLOGD("%s",__func__);
     mManager->registerListener(this);
-    if(hwZebra == nullptr){
-        FLOGE("Get hw zebra service error!");
-    }else{
-        hwZebra->helloWorld("Zebra", [&](hidl_string result){
-            FLOGE("IZebra helloWorld %s", result.c_str());
-        });
+    if(hwZebra != nullptr){
+        hwZebra->registerCallback((IZebraCallback*)this);
     }
 }
 
 ZebraService::~ZebraService()
 {
     mManager->unRegisterListener(this);
+    if(hwZebra != nullptr){
+        hwZebra->unRegisterCallback((IZebraCallback*)this);
+    }
     FLOGD("%s",__func__);
 }
 
 int32_t ZebraService::notify(const char* data, int32_t size)
 {
+    struct NotifyData* notifyData = (struct NotifyData*)data;
+    switch (notifyData->type) {
+    case TYPE_INPUT_TOUCH:
+    case TYPE_INPUT_KEY:
+    case TYPE_INPUT_TEXT:
+        if(hwZebra != nullptr) {
+            hidl_vec<int8_t> event;
+            event.resize(size);
+            memcpy(event.data(), data, size);
+            FLOGE("send hidl Event......");
+            hwZebra->sendEvent(event);
+        }
+        return 0;
+    }
     return 0;
+}
+
+Return<void> ZebraService::notifyEvent(const hidl_vec<int8_t>& event)
+{
+    FLOGE("recv hidl Event......");
+    return Return<void>();
 }
 
 status_t ZebraService::onTransact(uint32_t code, const Parcel& data, Parcel* reply, uint32_t flags)

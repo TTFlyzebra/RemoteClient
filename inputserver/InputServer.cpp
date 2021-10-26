@@ -71,7 +71,7 @@ int32_t InputServer::notify(const char* data, int32_t size)
             events.insert(events.end(), data, data+size);
             mcond_event.notify_one();
         }
-        return 1;
+        return 0;
     }
     return 0;
 }
