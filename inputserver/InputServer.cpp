@@ -168,10 +168,7 @@ void InputServer::handleInputEvent()
         case TYPE_INPUT_KEY:
             {
                 if(0x03 == (data[17]&0xFF)){
-                    const char* kCommand = "/system/bin/input";
-                    const char* const argv[] = {kCommand, "keyevent","3"};
-                    execv(kCommand, (char* const*)(argv));
-                    FLOGE("%s", kCommand);
+                    //system("/system/bin/input keyevent 3");
                 }else{
                     inputKey(key_fd, (int16_t)(data[17]&0xFF));
                 }

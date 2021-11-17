@@ -49,7 +49,6 @@ int32_t ZebraService::notify(const char* data, int32_t size)
             hidl_vec<int8_t> event;
             event.resize(size);
             memcpy(event.data(), data, size);
-            FLOGE("send hidl Event......");
             hwZebra->sendEvent(event);
         }
         return 0;
@@ -59,7 +58,6 @@ int32_t ZebraService::notify(const char* data, int32_t size)
 
 Return<void> ZebraService::notifyEvent(const hidl_vec<int8_t>& event)
 {
-    FLOGE("recv hidl Event......");
     return Return<void>();
 }
 
@@ -88,4 +86,3 @@ status_t ZebraService::onTransact(uint32_t code, const Parcel& data, Parcel* rep
 }
 
 }
-
