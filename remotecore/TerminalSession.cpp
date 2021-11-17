@@ -9,6 +9,7 @@
 #include <netinet/in.h>
 #include <fcntl.h>
 #include <utils/Timers.h>
+#include <cutils/properties.h>
 #include "TerminalSession.h"
 #include "Config.h"
 #include "Command.h"
@@ -110,7 +111,9 @@ void TerminalSession::connThread()
             memset(&servaddr, 0, sizeof(servaddr));
             servaddr.sin_family = AF_INET;
             servaddr.sin_port = htons(TERMINAL_SERVER_TCP_PORT);
-            servaddr.sin_addr.s_addr = inet_addr(REMOTEPC_SERVER_IP);
+            char prop_ip[PROPERTY_VALUE_MAX] = {0};
+            property_get("persist.sys.mctl.ip", prop_ip, REMOTEPC_SERVER_IP);
+            servaddr.sin_addr.s_addr = inet_addr(prop_ip);
             if (connect(mSocket, (struct sockaddr *) &servaddr, sizeof(servaddr)) != 0) {
                 //FLOGD("TerminalSession connect failed! errno[%d][%s]", errno, strerror(errno));
                 shutdown(mSocket, SHUT_RDWR);
