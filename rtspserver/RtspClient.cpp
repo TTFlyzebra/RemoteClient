@@ -174,27 +174,25 @@ void RtspClient::handleData()
         char action[64] = {0};
         if(sscanf((const char*)&recvBuf[0], "%s %s %s\r", action, url, ver) == 3) {
             int32_t cseq;
-        	sscanf(strstr((const char*)&recvBuf[0], "CSeq"), "CSeq: %d", &cseq);
-            std::string method(action);
-            if (method == "OPTIONS") {
-                onOptionsRequest((const char*)&recvBuf[0], cseq);
-            }else if(method == "DESCRIBE"){
-                onDescribeRequest((const char*)&recvBuf[0], cseq);
-            }else if(method == "SETUP"){
-                onSetupRequest((const char*)&recvBuf[0], cseq);
-            }else if(method == "PLAY"){
-                onPlayRequest((const char*)&recvBuf[0], cseq);
-            }else if(method == "GET_PARAMETER"){
-                onGetParameterRequest((const char*)&recvBuf[0], cseq);
+            const char *temp = strstr((const char*)&recvBuf[0], "CSeq");
+            if(temp != nullptr){
+        	    sscanf(temp, "CSeq: %d", &cseq);
+                std::string method(action);
+                if (method == "OPTIONS") {
+                    onOptionsRequest((const char*)&recvBuf[0], cseq);
+                }else if(method == "DESCRIBE"){
+                    onDescribeRequest((const char*)&recvBuf[0], cseq);
+                }else if(method == "SETUP"){
+                    onSetupRequest((const char*)&recvBuf[0], cseq);
+                }else if(method == "PLAY"){
+                    onPlayRequest((const char*)&recvBuf[0], cseq);
+                }else if(method == "GET_PARAMETER"){
+                    onGetParameterRequest((const char*)&recvBuf[0], cseq);
+                }
             }
         }else{
             onOtherRequest((const char*)&recvBuf[0], -1);
         } 
-        char *temp = (char *)malloc((sendBuf.size()+1) * sizeof(char));
-        temp[sendBuf.size()] = 0;
-        memcpy(temp, &sendBuf[0], sendBuf.size());
-        FLOGD("RtspClient will send:len=[%zu]\n%s",sendBuf.size(), temp);
-        free(temp);
         recvBuf.clear();
     }
 }
@@ -262,6 +260,7 @@ void RtspClient::onOptionsRequest(const char* data, int32_t cseq)
     response.append("Public: OPTIONS, DESCRIBE, SETUP, TEARDOWN, PLAY, PAUSE, GET_PARAMETER, SET_PARAMETER\r\n");
     response.append("\r\n");
     int32_t ret = send(mSocket,response.c_str(),response.size(),0);
+    FLOGD("RtspClient send:len=[%d] errno[%d]\n%s",ret, errno, response.c_str());
     if(ret <= 0) disConnect();
 }
 
@@ -315,6 +314,7 @@ void RtspClient::onDescribeRequest(const char* data, int32_t cseq)
     response.append("\r\n");
     response.append(spd.c_str());
     int32_t ret = send(mSocket,response.c_str(),response.size(),0);
+    FLOGD("RtspClient send:len=[%d] errno[%d]\n%s",ret, errno, response.c_str());
     if(ret <= 0) disConnect();
 }
 
@@ -354,6 +354,7 @@ void RtspClient::onSetupRequest(const char* data, int32_t cseq)
     response.append(temp);
     response.append("\r\n");
     int32_t ret = send(mSocket,response.c_str(),response.size(),0);
+    FLOGD("RtspClient send:len=[%d] errno[%d]\n%s",ret, errno, response.c_str());
     if(ret <= 0) disConnect();
 }
 
@@ -367,8 +368,10 @@ void RtspClient::onPlayRequest(const char* data, int32_t cseq)
     response.append(temp);
     response.append("\r\n");
     int32_t ret = send(mSocket,response.c_str(),response.size(),0);
-    if(ret <= 0) disConnect();
-    {
+    FLOGD("RtspClient send:len=[%d] errno[%d]\n%s",ret, errno, response.c_str());
+    if(ret <= 0) {
+        disConnect();
+    }else {
         char video_start[sizeof(VIDEO_START)];
         memcpy(video_start, VIDEO_START, sizeof(VIDEO_START));
         memcpy(video_start + 8,&mTerminal,8);
@@ -391,6 +394,7 @@ void RtspClient::onGetParameterRequest(const char* data, int32_t cseq)
     appendCommonResponse(&response, cseq);
     response.append("\r\n");
     int32_t ret = send(mSocket,response.c_str(),response.size(),0);
+    FLOGD("RtspClient send:len=[%d] errno[%d]\n%s",ret, errno, response.c_str());
     if(ret <= 0) disConnect();
 }
 
@@ -400,6 +404,7 @@ void RtspClient::onOtherRequest(const char* data, int32_t cseq)
     appendCommonResponse(&response, cseq);
     response.append("\r\n");
     int32_t ret = send(mSocket,response.c_str(),response.size(),0);
+    FLOGD("RtspClient send:len=[%d] errno[%d]\n%s",ret, errno, response.c_str());
     if(ret <= 0) disConnect();
 }
 
