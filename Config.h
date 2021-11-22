@@ -21,7 +21,7 @@
 #define KEYEVENT_DEV_KEY                    "/dev/input/event0"
 #define KEYEVENT_DEV_TS                     "/dev/input/event0"
 
-#define REMOTEPC_SERVER_IP                  "192.168.8.244"
+#define REMOTEPC_SERVER_IP                  "192.168.3.44"
 #define REMOTEPC_SERVER_TCP_PORT            9036
 #define TERMINAL_SERVER_TCP_PORT            9038
 #define TERMINAL_MAX_BUFFER                 8388608

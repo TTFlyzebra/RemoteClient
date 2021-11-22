@@ -59,7 +59,7 @@ static status_t configureSignals()
 
 int32_t main(int32_t  argc,  char*  argv[])
 {
-    FLOGD("###mobilectl Ver 1.0 Date 2021013###");
+    FLOGD("###mobilectl Ver 1.0 Date 20211118###");
     FLOGD("main client is start.\n");
     signal(SIGPIPE, SIG_IGN);
     isStop = false;

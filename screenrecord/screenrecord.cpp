@@ -168,6 +168,7 @@ static status_t prepareEncoder(float displayFps, sp<MediaCodec>* pCodec,
     format->setFloat("frame-rate", 20.0f);
     format->setFloat("max-fps-to-encoder",20.0f);
     format->setInt32("i-frame-interval", 10);
+    format->setInt64("repeat-previous-frame-after", 100000);
 
     sp<ALooper> looper = new ALooper;
     looper->setName("screenrecord_looper");
